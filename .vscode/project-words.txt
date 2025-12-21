@@ -1,0 +1,9 @@
+bindir
+Kodkod
+konsol
+kwargs
+nilable
+popen
+readlines
+rubocop
+sidekiq
