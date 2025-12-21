@@ -257,13 +257,14 @@ The webview is a React 19 application with Zustand for state management.
 
 ```typescript
 import { create } from 'zustand';
-import type { EvalResult } from '../../shared/types';
+import type { EvalResult, StdoutParams, StderrParams } from '../../shared/types';
 
 interface OutputEntry {
   id: string;
-  type: 'command' | 'result' | 'error';
+  type: 'command' | 'result' | 'error' | 'stdout' | 'stderr';
   code?: string;
   result?: EvalResult;
+  chunk?: string;  // For stdout/stderr streaming
   timestamp: number;
 }
 
@@ -365,34 +366,75 @@ import { Editor } from './components/Editor';
 import { StatusBar } from './components/StatusBar';
 import { useKonsolStore } from './stores/konsol-store';
 import { vscode } from './lib/vscode-api';
+import type { ExtensionMessage } from '../../shared/types';
 
 export function App() {
   const { setConnected, addEntry, setEvaluating } = useKonsolStore();
 
   useEffect(() => {
     // Listen for messages from extension host
-    const handleMessage = (event: MessageEvent) => {
+    const handleMessage = (event: MessageEvent<ExtensionMessage>) => {
       const message = event.data;
 
       switch (message.type) {
         case 'connected':
           setConnected(true, message.sessionId);
           break;
+
         case 'disconnected':
           setConnected(false);
           break;
+
         case 'evalResult':
           setEvaluating(false);
-          addEntry({ type: 'result', result: message.data });
+          // Check if result has exception
+          if (message.data.exception) {
+            addEntry({ type: 'error', result: message.data });
+          } else {
+            addEntry({ type: 'result', result: message.data });
+          }
           break;
-        case 'evalError':
+
+        case 'stdout':
+          // Streaming stdout from konsol/stdout notification
+          addEntry({ type: 'stdout', chunk: message.data.chunk });
+          break;
+
+        case 'stderr':
+          // Streaming stderr from konsol/stderr notification
+          addEntry({ type: 'stderr', chunk: message.data.chunk });
+          break;
+
+        case 'status':
+          // Session busy status from konsol/status notification
+          setEvaluating(message.data.busy);
+          break;
+
+        case 'error':
+          // JSON-RPC error
           setEvaluating(false);
-          addEntry({ type: 'error', result: message.data });
+          addEntry({
+            type: 'error',
+            result: {
+              value: '',
+              stdout: '',
+              stderr: '',
+              exception: {
+                className: 'RpcError',
+                message: `[${message.error.code}] ${message.error.message}`,
+                backtrace: [],
+              },
+            },
+          });
           break;
       }
     };
 
     window.addEventListener('message', handleMessage);
+
+    // Notify extension we're ready
+    vscode.postMessage({ type: 'ready' });
+
     return () => window.removeEventListener('message', handleMessage);
   }, [setConnected, addEntry, setEvaluating]);
 
@@ -578,6 +620,273 @@ export const vscode: VSCodeAPI = acquireVsCodeApi();
 .konsol-error   { color: var(--vscode-terminal-ansiRed); }
 .konsol-stdout  { color: var(--vscode-terminal-foreground); }
 .konsol-stderr  { color: var(--vscode-terminal-ansiYellow); }
+```
+
+---
+
+### 5. Shared Protocol Types (`shared/types.ts`)
+
+TypeScript types matching the konsol gem's Sorbet structs. All JSON keys use **camelCase** (converted from Ruby's snake_case at protocol boundary).
+
+#### JSON-RPC Method Names
+
+```typescript
+/**
+ * JSON-RPC method names - must match Konsol::Protocol::Method enum
+ */
+export const KonsolMethod = {
+  // Lifecycle
+  Initialize: 'initialize',
+  Shutdown: 'shutdown',
+  Exit: 'exit',
+  CancelRequest: '$/cancelRequest',
+
+  // Console
+  SessionCreate: 'konsol/session.create',
+  Eval: 'konsol/eval',
+  Interrupt: 'konsol/interrupt',
+
+  // Notifications (server → client)
+  Stdout: 'konsol/stdout',
+  Stderr: 'konsol/stderr',
+  Status: 'konsol/status',
+} as const;
+
+export type KonsolMethodType = (typeof KonsolMethod)[keyof typeof KonsolMethod];
+```
+
+#### Error Codes
+
+```typescript
+/**
+ * JSON-RPC error codes - must match Konsol::Protocol::ErrorCode enum
+ */
+export const ErrorCode = {
+  // Standard JSON-RPC
+  ParseError: -32700,
+  InvalidRequest: -32600,
+  MethodNotFound: -32601,
+  InvalidParams: -32602,
+  InternalError: -32603,
+
+  // Konsol-specific
+  SessionNotFound: -32001,
+  SessionBusy: -32002,
+  RailsBootFailed: -32003,
+  EvalTimeout: -32004,
+  ServerShuttingDown: -32005,
+} as const;
+
+export type ErrorCodeType = (typeof ErrorCode)[keyof typeof ErrorCode];
+```
+
+#### Request Parameter Types
+
+```typescript
+/**
+ * Initialize request params
+ * @see Konsol::Protocol::Requests::InitializeParams
+ */
+export interface ClientInfo {
+  name: string;
+  version?: string;
+}
+
+export interface InitializeParams {
+  processId?: number;
+  clientInfo?: ClientInfo;
+}
+
+/**
+ * Session create request params (empty)
+ * @see Konsol::Protocol::Requests::SessionCreateParams
+ */
+export interface SessionCreateParams {}
+
+/**
+ * Eval request params
+ * @see Konsol::Protocol::Requests::EvalParams
+ */
+export interface EvalParams {
+  sessionId: string;
+  code: string;
+}
+
+/**
+ * Interrupt request params
+ * @see Konsol::Protocol::Requests::InterruptParams
+ */
+export interface InterruptParams {
+  sessionId: string;
+}
+
+/**
+ * Cancel request params
+ * @see Konsol::Protocol::Requests::CancelParams
+ */
+export interface CancelParams {
+  id: string | number;
+}
+```
+
+#### Response Result Types
+
+```typescript
+/**
+ * Initialize response result
+ * @see Konsol::Protocol::Responses::InitializeResult
+ */
+export interface ServerInfo {
+  name: string;
+  version: string;
+}
+
+export interface Capabilities {
+  supportsInterrupt: boolean;
+}
+
+export interface InitializeResult {
+  serverInfo: ServerInfo;
+  capabilities: Capabilities;
+}
+
+/**
+ * Session create response result
+ * @see Konsol::Protocol::Responses::SessionCreateResult
+ */
+export interface SessionCreateResult {
+  sessionId: string;
+}
+
+/**
+ * Exception info within eval result
+ * @see Konsol::Protocol::Responses::ExceptionInfo
+ */
+export interface ExceptionInfo {
+  className: string;
+  message: string;
+  backtrace: string[];
+}
+
+/**
+ * Eval response result
+ * @see Konsol::Protocol::Responses::EvalResult
+ */
+export interface EvalResult {
+  value: string;
+  valueType?: string;
+  stdout: string;
+  stderr: string;
+  exception?: ExceptionInfo;
+}
+
+/**
+ * Interrupt response result
+ * @see Konsol::Protocol::Responses::InterruptResult
+ */
+export interface InterruptResult {
+  success: boolean;
+}
+```
+
+#### Notification Parameter Types
+
+```typescript
+/**
+ * Stdout notification params
+ * @see Konsol::Protocol::Notifications::StdoutParams
+ */
+export interface StdoutParams {
+  sessionId: string;
+  chunk: string;
+}
+
+/**
+ * Stderr notification params
+ * @see Konsol::Protocol::Notifications::StderrParams
+ */
+export interface StderrParams {
+  sessionId: string;
+  chunk: string;
+}
+
+/**
+ * Status notification params
+ * @see Konsol::Protocol::Notifications::StatusParams
+ */
+export interface StatusParams {
+  sessionId: string;
+  busy: boolean;
+}
+```
+
+#### JSON-RPC Message Types
+
+```typescript
+/**
+ * JSON-RPC error data
+ * @see Konsol::Protocol::Message::ErrorData
+ */
+export interface RpcError {
+  code: ErrorCodeType;
+  message: string;
+  data?: Record<string, unknown>;
+}
+
+/**
+ * JSON-RPC request
+ */
+export interface RpcRequest<P = unknown> {
+  jsonrpc: '2.0';
+  id: string | number | null;
+  method: string;
+  params?: P;
+}
+
+/**
+ * JSON-RPC response
+ */
+export interface RpcResponse<R = unknown> {
+  jsonrpc: '2.0';
+  id: string | number | null;
+  result?: R;
+  error?: RpcError;
+}
+
+/**
+ * JSON-RPC notification (no id, no response expected)
+ */
+export interface RpcNotification<P = unknown> {
+  jsonrpc: '2.0';
+  method: string;
+  params?: P;
+}
+```
+
+#### Extension ↔ Webview Messages
+
+```typescript
+/**
+ * Messages from extension host to webview
+ */
+export type ExtensionMessage =
+  | { type: 'connected'; sessionId: string }
+  | { type: 'disconnected'; reason?: string }
+  | { type: 'evalResult'; data: EvalResult }
+  | { type: 'stdout'; data: StdoutParams }
+  | { type: 'stderr'; data: StderrParams }
+  | { type: 'status'; data: StatusParams }
+  | { type: 'error'; error: RpcError };
+
+/**
+ * Messages from webview to extension host
+ */
+export type WebviewMessage =
+  | { type: 'ready' }
+  | { type: 'eval'; code: string }
+  | { type: 'interrupt' }
+  | { type: 'clear' }
+  | { type: 'requestCompletions'; code: string; position: number };
 ```
 
 ---
