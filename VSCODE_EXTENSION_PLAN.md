@@ -14,9 +14,7 @@ The extension provides a **custom terminal-like bottom panel** in VSCode for Rai
 
 ---
 
-## Architecture Options
-
-### Option A: WebviewView Panel (Recommended)
+## Architecture: WebviewView Panel with Monaco
 
 Use VSCode's `WebviewViewProvider` API to create a custom view in the bottom panel area.
 
@@ -40,41 +38,15 @@ Use VSCode's `WebviewViewProvider` API to create a custom view in the bottom pan
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**Pros:**
+**Why this approach:**
 - Native VSCode integration (appears alongside Terminal, Problems, Output)
 - Full HTML/CSS/JS flexibility for UI
 - Can embed Monaco editor for code input
 - Standard VSCode panel behavior (drag, resize, split)
 
-**Cons:**
+**Trade-offs:**
 - Monaco in webview is isolated from main VSCode (no shared settings/themes)
-- Requires custom autocomplete implementation
-
-### Option B: Virtual Document + Output Channel
-
-Use a virtual document for input and an output channel for results.
-
-**Pros:**
-- Native editor features (Ruby LSP works automatically)
-- No webview overhead
-
-**Cons:**
-- Awkward UX (separate windows/panels)
-- Less control over layout
-- Not terminal-like experience
-
-### Option C: Terminal with Custom Profile (Not Recommended)
-
-Create a pseudo-terminal that wraps konsol.
-
-**Cons:**
-- Limited formatting options
-- No rich UI elements
-- Poor autocomplete integration
-
----
-
-## Recommended Architecture: Option A with Monaco
+- Requires custom autocomplete implementation (solved via LSP delegation)
 
 ### High-Level Components
 
@@ -559,41 +531,6 @@ const writer = new StreamMessageWriter(process.stdin);
 - Lazy-load Monaco editor
 - Virtual scroll for long output history
 - Limit history size
-
----
-
-## Alternative: Native Editor Approach
-
-If webview complexity is a concern, consider a simpler approach:
-
-### Using Output Channel + Input Box
-
-```typescript
-// Create output channel for results
-const output = vscode.window.createOutputChannel('Konsol', 'ruby');
-
-// Use input box for commands
-vscode.commands.registerCommand('konsol.prompt', async () => {
-  const code = await vscode.window.showInputBox({
-    prompt: 'Enter Ruby code',
-    placeHolder: 'User.count'
-  });
-  if (code) {
-    const result = await client.eval(code);
-    output.appendLine(`> ${code}`);
-    output.appendLine(`=> ${result.value}`);
-  }
-});
-```
-
-**Pros:**
-- Much simpler
-- Native VSCode look and feel
-
-**Cons:**
-- Poor UX (modal input box)
-- No persistent input area
-- Limited formatting
 
 ---
 
