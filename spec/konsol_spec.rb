@@ -1,3 +1,4 @@
+# typed: false
 # frozen_string_literal: true
 
 RSpec.describe Konsol do
@@ -5,7 +6,7 @@ RSpec.describe Konsol do
     expect(Konsol::VERSION).not_to be_nil
   end
 
-  it "does something useful" do
-    expect(false).to be(true)
+  it "defines an Error class" do
+    expect(Konsol::Error).to be < StandardError
   end
 end

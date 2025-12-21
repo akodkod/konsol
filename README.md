@@ -1,43 +1,170 @@
 # Konsol
 
-TODO: Delete this and the text below, and describe your gem
+A JSON-RPC 2.0 server providing a GUI-friendly Rails console backend with LSP-style framing over STDIN/STDOUT.
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/konsol`. To experiment with that code, run `bin/console` for an interactive prompt.
+## Features
+
+- JSON-RPC 2.0 protocol over stdio
+- LSP-style Content-Length framing
+- Session-based REPL with state persistence
+- stdout/stderr capture
+- Exception handling with backtraces
+- Rails executor/reloader integration
 
 ## Installation
 
-TODO: Replace `UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG` with your gem name right after releasing it to RubyGems.org. Please do not do it earlier due to security reasons. Alternatively, replace this section with instructions to install your gem from git if you don't plan to release to RubyGems.org.
+Add to your Rails application's Gemfile:
 
-Install the gem and add to the application's Gemfile by executing:
-
-```bash
-bundle add UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
+```ruby
+gem "konsol"
 ```
 
-If bundler is not being used to manage dependencies, install the gem by executing:
+Then run:
 
 ```bash
-gem install UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
+bundle install
 ```
 
 ## Usage
 
-TODO: Write usage instructions here
+### Starting the Server
+
+From your Rails application directory:
+
+```bash
+cd /path/to/rails/app
+bundle exec konsol --stdio
+```
+
+### CLI Options
+
+```
+Usage: konsol [options]
+
+Options:
+    --stdio          Use stdio for JSON-RPC transport (required)
+    --version, -v    Print version and exit
+    --help, -h       Print this help and exit
+
+Environment:
+    RAILS_ENV        Rails environment (default: development)
+```
+
+### Protocol
+
+Konsol uses JSON-RPC 2.0 with LSP-style framing:
+
+```
+Content-Length: <byte-length>\r\n
+\r\n
+<JSON-payload>
+```
+
+### Example Session
+
+#### Initialize
+
+Request:
+```json
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"my-client"}}}
+```
+
+Response:
+```json
+{"jsonrpc":"2.0","id":1,"result":{"serverInfo":{"name":"konsol","version":"0.1.0"},"capabilities":{"supportsInterrupt":false}}}
+```
+
+#### Create Session
+
+Request:
+```json
+{"jsonrpc":"2.0","id":2,"method":"konsol/session.create"}
+```
+
+Response:
+```json
+{"jsonrpc":"2.0","id":2,"result":{"sessionId":"550e8400-e29b-41d4-a716-446655440000"}}
+```
+
+#### Evaluate Code
+
+Request:
+```json
+{"jsonrpc":"2.0","id":3,"method":"konsol/eval","params":{"sessionId":"550e8400-e29b-41d4-a716-446655440000","code":"User.count"}}
+```
+
+Response:
+```json
+{"jsonrpc":"2.0","id":3,"result":{"value":"42","valueType":"Integer","stdout":"","stderr":""}}
+```
+
+#### State Persistence
+
+Request:
+```json
+{"jsonrpc":"2.0","id":4,"method":"konsol/eval","params":{"sessionId":"...","code":"x = 123"}}
+```
+
+```json
+{"jsonrpc":"2.0","id":5,"method":"konsol/eval","params":{"sessionId":"...","code":"x + 1"}}
+```
+
+Response:
+```json
+{"jsonrpc":"2.0","id":5,"result":{"value":"124","valueType":"Integer","stdout":"","stderr":""}}
+```
+
+#### Shutdown
+
+Request:
+```json
+{"jsonrpc":"2.0","id":6,"method":"shutdown"}
+```
+
+Response:
+```json
+{"jsonrpc":"2.0","id":6,"result":null}
+```
+
+Notification:
+```json
+{"jsonrpc":"2.0","method":"exit"}
+```
+
+### Manual Testing with printf
+
+```bash
+cd /path/to/rails/app
+
+# Send initialize request
+printf 'Content-Length: 79\r\n\r\n{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"test"}}}' | bundle exec konsol --stdio
+```
+
+### Error Codes
+
+| Code   | Constant           | Description                       |
+|--------|--------------------|-----------------------------------|
+| -32700 | ParseError         | Invalid JSON                      |
+| -32600 | InvalidRequest     | Not a valid request object        |
+| -32601 | MethodNotFound     | Method does not exist             |
+| -32602 | InvalidParams      | Invalid method parameters         |
+| -32603 | InternalError      | Internal server error             |
+| -32001 | SessionNotFound    | Session ID does not exist         |
+| -32002 | SessionBusy        | Session is currently evaluating   |
+| -32003 | RailsBootFailed    | Failed to boot Rails environment  |
+| -32004 | EvalTimeout        | Evaluation timed out              |
+| -32005 | ServerShuttingDown | Server is shutting down           |
 
 ## Development
 
-After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake spec` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
+After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake spec` to run the tests.
 
-To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and the created tag, and push the `.gem` file to [rubygems.org](https://rubygems.org).
-
-## Contributing
-
-Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/konsol. This project is intended to be a safe, welcoming space for collaboration, and contributors are expected to adhere to the [code of conduct](https://github.com/[USERNAME]/konsol/blob/main/CODE_OF_CONDUCT.md).
+```bash
+bundle install
+bundle exec rake spec
+bundle exec rubocop
+```
 
 ## License
 
 The gem is available as open source under the terms of the [MIT License](https://opensource.org/licenses/MIT).
-
-## Code of Conduct
-
-Everyone interacting in the Konsol project's codebases, issue trackers, chat rooms and mailing lists is expected to follow the [code of conduct](https://github.com/[USERNAME]/konsol/blob/main/CODE_OF_CONDUCT.md).

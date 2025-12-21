@@ -1,0 +1,6 @@
+--dir
+.
+--ignore
+/spec/
+--ignore
+/sorbet/rbi/

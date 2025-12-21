@@ -1,0 +1,71 @@
+#!/usr/bin/env ruby
+# typed: strict
+# frozen_string_literal: true
+
+require "konsol"
+
+module Konsol
+  class CLI
+    extend T::Sig
+
+    sig { params(args: T::Array[String]).void }
+    def initialize(args)
+      @args = args
+    end
+
+    sig { returns(Integer) }
+    def run
+      if @args.include?("--help") || @args.include?("-h")
+        print_help
+        return 0
+      end
+
+      if @args.include?("--version") || @args.include?("-v")
+        print_version
+        return 0
+      end
+
+      unless @args.include?("--stdio")
+        warn "Error: --stdio is required"
+        warn "Run 'konsol --help' for usage information"
+        return 1
+      end
+
+      run_server
+    end
+
+    private
+
+    sig { void }
+    def print_help
+      puts <<~HELP
+        Usage: konsol [options]
+
+        Options:
+            --stdio          Use stdio for JSON-RPC transport (required for v1)
+            --version, -v    Print version and exit
+            --help, -h       Print this help and exit
+
+        Environment:
+            RAILS_ENV        Rails environment (default: development)
+            KONSOL_LOG       Log file path (default: none, silent)
+
+        Examples:
+            cd /path/to/rails/app && bundle exec konsol --stdio
+      HELP
+    end
+
+    sig { void }
+    def print_version
+      puts "konsol #{Konsol::VERSION}"
+    end
+
+    sig { returns(Integer) }
+    def run_server
+      server = Konsol::Server.new
+      server.run
+    end
+  end
+end
+
+exit Konsol::CLI.new(ARGV).run
