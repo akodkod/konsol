@@ -211,29 +211,68 @@ The webview contains:
 
 ```html
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <style>
-    .konsol-container { display: flex; flex-direction: column; height: 100%; }
-    .output { flex: 1; overflow-y: auto; font-family: monospace; padding: 8px; }
-    .input-area { border-top: 1px solid var(--vscode-panel-border); }
-    .prompt { color: var(--vscode-terminal-ansiGreen); }
-    .result { color: var(--vscode-terminal-ansiBrightBlue); }
-    .error { color: var(--vscode-terminal-ansiRed); }
-    .stdout { color: var(--vscode-terminal-foreground); }
-  </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="
+    default-src 'none';
+    style-src ${webview.cspSource} 'unsafe-inline';
+    script-src 'nonce-${nonce}';
+    font-src ${webview.cspSource};
+    img-src ${webview.cspSource} data:;
+  ">
+  <link rel="stylesheet" href="${stylesUri}">
+  <link rel="stylesheet" href="${codiconsUri}">
+  <title>Konsol</title>
 </head>
 <body>
   <div class="konsol-container">
-    <div class="output" id="output"></div>
-    <div class="input-area">
-      <div id="monaco-editor" style="height: 60px;"></div>
+    <div class="konsol-output" id="output"></div>
+    <div class="konsol-input-wrapper">
+      <div id="monaco-editor"></div>
+      <button class="konsol-run-btn" title="Run (Ctrl+Enter)">
+        <span class="codicon codicon-play"></span>
+      </button>
     </div>
   </div>
-  <script src="${monacoLoaderUri}"></script>
-  <script src="${mainScriptUri}"></script>
+  <script nonce="${nonce}" src="${mainScriptUri}"></script>
 </body>
 </html>
+```
+
+**Styling with VSCode CSS variables** (see `VSCODE_EXTENSION_BEST_PRACTICES.md` for full reference):
+
+```css
+/* Uses native VSCode theme colors */
+.konsol-container {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--vscode-panel-background);
+  color: var(--vscode-foreground);
+  font-family: var(--vscode-editor-font-family), monospace;
+  font-size: var(--vscode-editor-font-size);
+}
+
+.konsol-output {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 12px;
+}
+
+.konsol-input-wrapper {
+  display: flex;
+  border-top: 1px solid var(--vscode-panel-border);
+  background: var(--vscode-input-background);
+}
+
+/* Terminal-style output colors */
+.konsol-prompt  { color: var(--vscode-terminal-ansiGreen); }
+.konsol-result  { color: var(--vscode-terminal-ansiBrightBlue); }
+.konsol-error   { color: var(--vscode-terminal-ansiRed); }
+.konsol-stdout  { color: var(--vscode-terminal-foreground); }
+.konsol-stderr  { color: var(--vscode-terminal-ansiYellow); }
 ```
 
 ---
@@ -420,7 +459,9 @@ Use [@codingame/monaco-vscode-api](https://github.com/CodinGame/monaco-vscode-ap
     }
   },
   "dependencies": {
-    "vscode-jsonrpc": "^8.2.0"
+    "vscode-jsonrpc": "^8.2.0",
+    "@vscode-elements/elements": "^1.0.0",
+    "@vscode/codicons": "^0.0.36"
   },
   "devDependencies": {
     "@types/vscode": "^1.85.0",
@@ -542,18 +583,24 @@ const writer = new StreamMessageWriter(process.stdin);
 
 ### Webview
 - `monaco-editor`: Code editor (AMD bundle for browser)
-- Or: Simple textarea for MVP
+- `@vscode-elements/elements`: Native-looking UI components (buttons, inputs, etc.)
+- `@vscode/codicons`: VSCode icon font
 
 ### Build Tools
 - `typescript`: Type checking
 - `esbuild`: Fast bundling for extension and webview
 
+> **Note:** The `@vscode/webview-ui-toolkit` was deprecated Jan 2025. Use `@vscode-elements/elements` instead.
+
 ---
 
 ## References
 
+- [VSCODE_EXTENSION_BEST_PRACTICES.md](./VSCODE_EXTENSION_BEST_PRACTICES.md) — CSS variables, theming, security, performance
 - [VSCode Webview API](https://code.visualstudio.com/api/extension-guides/webview)
+- [VSCode Theme Color Reference](https://code.visualstudio.com/api/references/theme-color)
 - [VSCode Panel Guidelines](https://code.visualstudio.com/api/ux-guidelines/panel)
+- [vscode-elements](https://vscode-elements.github.io/) — UI component library
 - [vscode-jsonrpc](https://www.npmjs.com/package/vscode-jsonrpc)
 - [Ruby LSP VSCode Extension](https://github.com/Shopify/vscode-ruby-lsp)
 - [Monaco Editor](https://microsoft.github.io/monaco-editor/)
