@@ -149,62 +149,62 @@ DEPENDENCIES
   tapioca (~> 0.17)
 
 CHECKSUMS
-  ast (2.4.3) sha256=954615157c1d6a382bc27d690d973195e79db7f55e9765ac7c481c60bdb4d383
+  ast (2.4.3)
   benchmark (0.5.0) sha256=465df122341aedcb81a2a24b4d3bd19b6c67c1530713fd533f3ff034e419236c
   date (3.5.1) sha256=750d06384d7b9c15d562c76291407d89e368dda4d4fff957eb94962d325a0dc0
-  diff-lcs (1.6.2) sha256=9ae0d2cba7d4df3075fe8cd8602a8604993efc0dfa934cff568969efb1909962
+  diff-lcs (1.6.2)
   erb (6.0.1) sha256=28ecdd99c5472aebd5674d6061e3c6b0a45c049578b071e5a52c2a7f13c197e5
   erubi (1.13.1) sha256=a082103b0885dbc5ecf1172fede897f9ebdb745a4b97a5e8dc63953db1ee4ad9
   io-console (0.8.2) sha256=d6e3ae7a7cc7574f4b8893b4fca2162e57a825b223a177b7afa236c5ef9814cc
   irb (1.16.0) sha256=2abe56c9ac947cdcb2f150572904ba798c1e93c890c256f8429981a7675b0806
-  json (2.18.0) sha256=b10506aee4183f5cf49e0efc48073d7b75843ce3782c68dbeb763351c08fd505
+  json (2.18.0)
   konsol (0.1.0)
-  language_server-protocol (3.17.0.5) sha256=fd1e39a51a28bf3eec959379985a72e296e9f9acfce46f6a79d31ca8760803cc
-  lint_roller (1.1.0) sha256=2c0c845b632a7d172cb849cc90c1bce937a28c5c8ccccb50dfd46a485003cc87
+  language_server-protocol (3.17.0.5)
+  lint_roller (1.1.0)
   logger (1.7.0) sha256=196edec7cc44b66cfb40f9755ce11b392f21f7967696af15d274dde7edff0203
-  netrc (0.11.0) sha256=de1ce33da8c99ab1d97871726cba75151113f117146becbe45aa85cb3dabee3f
-  openssl (3.3.2) sha256=7f4e01215dc9c4be1fca71d692406be3e6340b39c1f71a47fea9c497decd0f6c
-  parallel (1.27.0) sha256=4ac151e1806b755fb4e2dc2332cbf0e54f2e24ba821ff2d3dcf86bf6dc4ae130
-  parser (3.3.10.0) sha256=ce3587fa5cc55a88c4ba5b2b37621b3329aadf5728f9eafa36bbd121462aabd6
+  netrc (0.11.0)
+  openssl (3.3.2)
+  parallel (1.27.0)
+  parser (3.3.10.0)
   pp (0.6.3) sha256=2951d514450b93ccfeb1df7d021cae0da16e0a7f95ee1e2273719669d0ab9df6
   prettyprint (0.2.0) sha256=2bc9e15581a94742064a3cc8b0fb9d45aae3d03a1baa6ef80922627a0766f193
   prism (1.7.0) sha256=10062f734bf7985c8424c44fac382ac04a58124ea3d220ec3ba9fe4f2da65103
   psych (5.3.1) sha256=eb7a57cef10c9d70173ff74e739d843ac3b2c019a003de48447b2963d81b1974
   racc (1.8.1) sha256=4a7f6929691dbec8b5209a0b373bc2614882b55fc5d2e447a21aaa691303d62f
-  rainbow (3.1.1) sha256=039491aa3a89f42efa1d6dec2fc4e62ede96eb6acd95e52f1ad581182b79bc6a
+  rainbow (3.1.1)
   rake (13.3.0) sha256=96f5092d786ff412c62fde76f793cc0541bd84d2eb579caa529aa8a059934493
-  rbi (0.3.8) sha256=ec680f32be5ffac2d34f81ef47fae751e2ada537cd0dab87bf80807b15d8d429
-  rbs (4.0.0.dev.4) sha256=a4a22ba03d2450e2a18c312b0b05cdc7b8b5d5c9fe255fc32cfea12ff1dd058b
+  rbi (0.3.8)
+  rbs (4.0.0.dev.4)
   rdoc (7.0.1) sha256=7ae1540c54eb8174f6549440dd2299276eac51deaa7d80ea7db9ea5b96559f53
-  regexp_parser (2.11.3) sha256=ca13f381a173b7a93450e53459075c9b76a10433caadcb2f1180f2c741fc55a4
+  regexp_parser (2.11.3)
   reline (0.6.3) sha256=1198b04973565b36ec0f11542ab3f5cfeeec34823f4e54cebde90968092b1835
-  require-hooks (0.2.2) sha256=effa81b61a669ca00cb1e8910411e0d6a8bb16b49a53d9e69b5e6372d6c90f31
-  rexml (3.4.4) sha256=19e0a2c3425dfbf2d4fc1189747bdb2f849b6c5e74180401b15734bc97b5d142
-  rspec (3.13.0) sha256=d490914ac1d5a5a64a0e1400c1d54ddd2a501324d703b8cfe83f458337bab993
-  rspec-core (3.13.6) sha256=a8823c6411667b60a8bca135364351dda34cd55e44ff94c4be4633b37d828b2d
-  rspec-expectations (3.13.5) sha256=33a4d3a1d95060aea4c94e9f237030a8f9eae5615e9bd85718fe3a09e4b58836
-  rspec-mocks (3.13.7) sha256=0979034e64b1d7a838aaaddf12bf065ea4dc40ef3d4c39f01f93ae2c66c62b1c
-  rspec-support (3.13.6) sha256=2e8de3702427eab064c9352fe74488cc12a1bfae887ad8b91cba480ec9f8afb2
-  rubocop (1.82.0) sha256=237b7dc24952d7ec469a9593c7a5283315515e2e7dc24ac91532819c254fc4ec
-  rubocop-ast (1.48.0) sha256=22df9bbf3f7a6eccde0fad54e68547ae1e2a704bf8719e7c83813a99c05d2e76
-  rubocop-performance (1.26.0) sha256=7bb0d9d9fb2ea122bf6f9a596dd7cf9dc93ab4950923d26c4ae4f328cef71ca9
-  rubocop-rake (0.7.1) sha256=3797f2b6810c3e9df7376c26d5f44f3475eda59eb1adc38e6f62ecf027cbae4d
-  rubocop-rspec (3.8.0) sha256=28440dccb3f223a9938ca1f946bd3438275b8c6c156dab909e2cb8bc424cab33
-  rubocop-sorbet (0.11.0) sha256=4fb4371076b41d3254ab24a241064c802700109bfd50b697dd3fc479069f8b41
-  ruby-progressbar (1.13.0) sha256=80fc9c47a9b640d6834e0dc7b3c94c9df37f08cb072b7761e4a71e22cff29b33
-  sorbet (0.6.12865) sha256=77b3b043a1791d97cb9e6be036dd75f124b62b6c0fa4b0f6ffb3c457bf61ca73
+  require-hooks (0.2.2)
+  rexml (3.4.4)
+  rspec (3.13.0)
+  rspec-core (3.13.6)
+  rspec-expectations (3.13.5)
+  rspec-mocks (3.13.7)
+  rspec-support (3.13.6)
+  rubocop (1.82.0)
+  rubocop-ast (1.48.0)
+  rubocop-performance (1.26.0)
+  rubocop-rake (0.7.1)
+  rubocop-rspec (3.8.0)
+  rubocop-sorbet (0.11.0)
+  ruby-progressbar (1.13.0)
+  sorbet (0.6.12865)
   sorbet-runtime (0.6.12865) sha256=36bd0d9e7cd2044604c1fa240b5c176861dd0a0d6816e03a448b4095a1c43017
-  sorbet-static (0.6.12865-universal-darwin) sha256=7af4bf887b9c30baf99234b179a15ccf060ae082a10537600222b0b80de4ead2
-  sorbet-static-and-runtime (0.6.12865) sha256=547b3e67eb34dfd7c49ca1976dbf388730f17f7b8e2006b63cb0fa95c61d623d
-  spoom (1.7.11) sha256=4e27384af6d3fde5aadc0287c51e6f76c0802259cbb3b6a67603bf718352f4cf
+  sorbet-static (0.6.12865-universal-darwin)
+  sorbet-static-and-runtime (0.6.12865)
+  spoom (1.7.11)
   stringio (3.2.0) sha256=c37cb2e58b4ffbd33fe5cd948c05934af997b36e0b6ca6fdf43afa234cf222e1
-  tapioca (0.17.10) sha256=880a682ca8314f798dd09e9f104134fbf1a713c13be51f7dd4741dd434e6471b
+  tapioca (0.17.10)
   thor (1.4.0) sha256=8763e822ccb0f1d7bee88cde131b19a65606657b847cc7b7b4b82e772bcd8a3d
   tsort (0.2.0) sha256=9650a793f6859a43b6641671278f79cfead60ac714148aabe4e3f0060480089f
-  unicode-display_width (3.2.0) sha256=0cdd96b5681a5949cdbc2c55e7b420facae74c4aaf9a9815eee1087cb1853c42
-  unicode-emoji (4.2.0) sha256=519e69150f75652e40bf736106cfbc8f0f73aa3fb6a65afe62fefa7f80b0f80f
-  yard (0.9.38) sha256=721fb82afb10532aa49860655f6cc2eaa7130889df291b052e1e6b268283010f
-  yard-sorbet (0.9.0) sha256=03d1aa461b9e9c82b886919a13aa3e09fcf4d1852239d2967ed97e92723ffe21
+  unicode-display_width (3.2.0)
+  unicode-emoji (4.2.0)
+  yard (0.9.38)
+  yard-sorbet (0.9.0)
 
 BUNDLED WITH
   4.0.1

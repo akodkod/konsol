@@ -9,7 +9,10 @@ module TestApp
     config.load_defaults Rails::VERSION::STRING.to_f
     config.eager_load = false
     config.logger = Logger.new(nil)
-    config.active_record.legacy_connection_handling = false if Rails::VERSION::MAJOR < 8
+    # legacy_connection_handling was removed in Rails 7.1
+    if Rails::VERSION::MAJOR < 7 || (Rails::VERSION::MAJOR == 7 && Rails::VERSION::MINOR < 1)
+      config.active_record.legacy_connection_handling = false
+    end
 
     # Disable unnecessary middleware for testing
     config.api_only = true
