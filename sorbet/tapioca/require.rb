@@ -1,4 +1,13 @@
 # typed: true
 # frozen_string_literal: true
 
-# Add your extra requires here (`bin/tapioca require` can be used to bootstrap this list)
+require "active_model/railtie"
+require "active_record/railtie"
+require "bundler/setup"
+require "json"
+require "open3"
+require "rails"
+require "securerandom"
+require "sorbet-runtime"
+require "stringio"
+require "timeout"

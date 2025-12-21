@@ -5,6 +5,7 @@ konsol
 kwargs
 nilable
 popen
+railtie
 readlines
 rubocop
 sidekiq
