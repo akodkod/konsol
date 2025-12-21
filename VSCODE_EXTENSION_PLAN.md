@@ -876,6 +876,163 @@ vscode-konsol/
 
 ---
 
+## Build Configuration
+
+### Build Script (`build.ts`)
+
+Uses Bun's built-in bundler (powered by esbuild) for fast builds:
+
+```typescript
+import type { BuildConfig } from 'bun';
+
+const isDev = process.argv.includes('--watch');
+const isWatch = process.argv.includes('--watch');
+
+// Extension Host (Node.js / CommonJS)
+const extensionConfig: BuildConfig = {
+  entrypoints: ['./src/extension.ts'],
+  outdir: './out',
+  target: 'node',
+  format: 'cjs',
+  external: ['vscode'],
+  sourcemap: isDev ? 'inline' : 'none',
+  minify: !isDev,
+  naming: '[name].js',
+};
+
+// Webview (Browser / ESM)
+const webviewConfig: BuildConfig = {
+  entrypoints: ['./webview/main.tsx'],
+  outdir: './out/webview',
+  target: 'browser',
+  format: 'esm',
+  sourcemap: isDev ? 'inline' : 'none',
+  minify: !isDev,
+  naming: '[name].js',
+};
+
+async function build() {
+  console.log(`🔨 Building${isWatch ? ' (watch mode)' : ''}...`);
+
+  const results = await Promise.all([
+    Bun.build(extensionConfig),
+    Bun.build(webviewConfig),
+  ]);
+
+  const [ext, web] = results;
+
+  if (!ext.success || !web.success) {
+    console.error('❌ Build failed');
+    for (const result of results) {
+      for (const log of result.logs) {
+        console.error(log);
+      }
+    }
+    process.exit(1);
+  }
+
+  console.log(`✅ Extension: ${ext.outputs.length} file(s)`);
+  console.log(`✅ Webview: ${web.outputs.length} file(s)`);
+}
+
+build();
+```
+
+### Package.json Scripts
+
+```json
+{
+  "scripts": {
+    "build": "bun run build.ts",
+    "watch": "bun run build.ts --watch",
+    "dev": "bun run watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src webview --ext .ts,.tsx",
+    "package": "bun run build && vsce package --no-dependencies",
+    "publish": "bun run build && vsce publish --no-dependencies"
+  }
+}
+```
+
+### TypeScript Configs
+
+**tsconfig.json** (Extension Host):
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "lib": ["ES2022"],
+    "outDir": "./out",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true
+  },
+  "include": ["src/**/*", "shared/**/*"],
+  "exclude": ["node_modules", "webview"]
+}
+```
+
+**tsconfig.webview.json** (React Webview):
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true
+  },
+  "include": ["webview/**/*", "shared/**/*"],
+  "exclude": ["node_modules"]
+}
+```
+
+### Web Component Type Declarations (`webview/vscode-elements.d.ts`)
+
+For React 19 to recognize vscode-elements:
+
+```typescript
+import type {
+  VscodeButton,
+  VscodeIcon,
+  VscodeTextfield,
+} from '@vscode-elements/elements';
+
+type WebComponentProps<T> = Partial<T> & {
+  class?: string;
+  children?: React.ReactNode;
+};
+
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      'vscode-button': WebComponentProps<VscodeButton> & {
+        appearance?: 'primary' | 'secondary' | 'icon';
+        disabled?: boolean;
+        onClick?: (e: Event) => void;
+      };
+      'vscode-icon': WebComponentProps<VscodeIcon> & {
+        name?: string;
+      };
+      'vscode-textfield': WebComponentProps<VscodeTextfield> & {
+        value?: string;
+        placeholder?: string;
+        onInput?: (e: Event) => void;
+      };
+    }
+  }
+}
+
+export {};
+```
+
+---
+
 ## Technical Considerations
 
 ### vscode-jsonrpc and LSP Framing
