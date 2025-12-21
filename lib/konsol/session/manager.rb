@@ -73,9 +73,13 @@ module Konsol
 
       sig { void }
       def load_console_helpers
-        return unless defined?(Rails) && Rails.application.respond_to?(:load_console)
+        return unless defined?(Rails)
 
-        Rails.application.load_console
+        app = Rails.application
+        return if app.nil?
+        return unless app.respond_to?(:load_console)
+
+        app.load_console
       end
     end
 

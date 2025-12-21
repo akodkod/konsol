@@ -34,7 +34,7 @@ module Konsol
 
       sig { returns(T.nilable(Integer)) }
       def read_headers
-        content_length = nil
+        content_length = T.let(nil, T.nilable(Integer))
 
         loop do
           line = @io.gets("\r\n")

@@ -142,10 +142,13 @@ module Konsol
           .returns(T.type_parameter(:T))
       end
       def with_rails_wrapping(&block)
-        return yield unless defined?(Rails) && Rails.application
+        return yield unless defined?(Rails)
 
-        executor = Rails.application.executor if Rails.application.respond_to?(:executor)
-        reloader = Rails.application.reloader if Rails.application.respond_to?(:reloader)
+        app = Rails.application
+        return yield unless app
+
+        executor = app.executor if app.respond_to?(:executor)
+        reloader = app.reloader if app.respond_to?(:reloader)
 
         if executor && reloader
           executor.wrap do

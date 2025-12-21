@@ -60,9 +60,7 @@ module Konsol
 
       const :jsonrpc, String, default: "2.0"
       const :id, RequestId
-      # rubocop:disable Sorbet/ForbidUntypedStructProps
-      const :result, T.nilable(T.untyped), default: nil
-      # rubocop:enable Sorbet/ForbidUntypedStructProps
+      const :result, T.untyped, default: nil # rubocop:disable Sorbet/ForbidUntypedStructProps
       const :error, T.nilable(ErrorData), default: nil
 
       sig { params(id: RequestId, result: T.untyped).returns(Response) }

@@ -3,4 +3,4 @@
 --ignore
 /spec/
 --ignore
-/sorbet/rbi/
+/sorbet/rbi/gems/
