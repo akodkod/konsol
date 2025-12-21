@@ -14,3 +14,6 @@ gem "rubocop", "1.82"
 gem "rubocop-performance", "1.26"
 gem "rubocop-rake", "0.7.1"
 gem "rubocop-rspec", "3.8"
+
+# Fix OpenSSL 3.x CRL verification issues
+gem "openssl", "3.3.2"

@@ -18,6 +18,7 @@ GEM
     json (2.18.0)
     language_server-protocol (3.17.0.5)
     lint_roller (1.1.0)
+    openssl (3.3.2)
     parallel (1.27.0)
     parser (3.3.10.0)
       ast (~> 2.4.1)
@@ -90,6 +91,7 @@ PLATFORMS
 DEPENDENCIES
   irb (= 1.16)
   konsol!
+  openssl (= 3.3.2)
   rake (= 13.3)
   rspec (= 3.13)
   rubocop (= 1.82)
@@ -108,6 +110,7 @@ CHECKSUMS
   konsol (0.1.0)
   language_server-protocol (3.17.0.5) sha256=fd1e39a51a28bf3eec959379985a72e296e9f9acfce46f6a79d31ca8760803cc
   lint_roller (1.1.0) sha256=2c0c845b632a7d172cb849cc90c1bce937a28c5c8ccccb50dfd46a485003cc87
+  openssl (3.3.2) sha256=7f4e01215dc9c4be1fca71d692406be3e6340b39c1f71a47fea9c497decd0f6c
   parallel (1.27.0) sha256=4ac151e1806b755fb4e2dc2332cbf0e54f2e24ba821ff2d3dcf86bf6dc4ae130
   parser (3.3.10.0) sha256=ce3587fa5cc55a88c4ba5b2b37621b3329aadf5728f9eafa36bbd121462aabd6
   pp (0.6.3) sha256=2951d514450b93ccfeb1df7d021cae0da16e0a7f95ee1e2273719669d0ab9df6
