@@ -14,6 +14,27 @@ The extension provides a **custom terminal-like bottom panel** in VSCode for Rai
 
 ---
 
+## Tech Stack
+
+| Layer | Technology | Purpose |
+|-------|------------|---------|
+| **Package Manager** | Bun | Fast installs, builds, and scripts |
+| **Extension Host** | TypeScript | VSCode extension runtime (Node.js) |
+| **Webview UI** | React 19 | Component-based UI with native web component support |
+| **State Management** | Zustand | Lightweight global store for webview state |
+| **Code Editor** | Monaco + @monaco-editor/react | Rich code input with syntax highlighting |
+| **UI Components** | vscode-elements | Native VSCode look via web components |
+| **Communication** | vscode-jsonrpc | JSON-RPC 2.0 with LSP framing |
+| **Build Tool** | esbuild (via Bun) | Fast bundling for extension and webview |
+
+### Why These Choices
+
+- **React 19**: Native web component support — use `<vscode-button>` directly without wrappers
+- **Zustand**: Minimal boilerplate, works great with React, easy persistence via `getState()`/`setState()`
+- **Bun**: Faster than npm/yarn, built-in TypeScript support, simpler scripts
+
+---
+
 ## Architecture: WebviewView Panel with Monaco
 
 Use VSCode's `WebviewViewProvider` API to create a custom view in the bottom panel area.
@@ -202,12 +223,11 @@ class KonsolViewProvider implements vscode.WebviewViewProvider {
 }
 ```
 
-### 4. Webview UI (`webview/index.html`, `webview/main.js`)
+### 4. Webview UI (React 19 + Zustand)
 
-The webview contains:
-- **Output area**: Scrollable history of commands and results
-- **Monaco editor**: Single-line or multi-line code input
-- **Status bar**: Connection status, session info
+The webview is a React 19 application with Zustand for state management.
+
+#### HTML Template (`webview/index.html`)
 
 ```html
 <!DOCTYPE html>
@@ -227,24 +247,302 @@ The webview contains:
   <title>Konsol</title>
 </head>
 <body>
-  <div class="konsol-container">
-    <div class="konsol-output" id="output"></div>
-    <div class="konsol-input-wrapper">
-      <div id="monaco-editor"></div>
-      <button class="konsol-run-btn" title="Run (Ctrl+Enter)">
-        <span class="codicon codicon-play"></span>
-      </button>
-    </div>
-  </div>
+  <div id="root"></div>
   <script nonce="${nonce}" src="${mainScriptUri}"></script>
 </body>
 </html>
 ```
 
-**Styling with VSCode CSS variables** (see `VSCODE_EXTENSION_BEST_PRACTICES.md` for full reference):
+#### Zustand Store (`webview/stores/konsol-store.ts`)
+
+```typescript
+import { create } from 'zustand';
+import type { EvalResult } from '../../shared/types';
+
+interface OutputEntry {
+  id: string;
+  type: 'command' | 'result' | 'error';
+  code?: string;
+  result?: EvalResult;
+  timestamp: number;
+}
+
+interface KonsolState {
+  // Connection
+  connected: boolean;
+  sessionId: string | null;
+
+  // UI State
+  history: OutputEntry[];
+  commandHistory: string[];
+  historyIndex: number;
+  isEvaluating: boolean;
+
+  // Actions
+  setConnected: (connected: boolean, sessionId?: string) => void;
+  addEntry: (entry: Omit<OutputEntry, 'id' | 'timestamp'>) => void;
+  clearHistory: () => void;
+  setEvaluating: (isEvaluating: boolean) => void;
+  navigateHistory: (direction: 'up' | 'down') => string | null;
+}
+
+export const useKonsolStore = create<KonsolState>((set, get) => ({
+  // Initial state
+  connected: false,
+  sessionId: null,
+  history: [],
+  commandHistory: [],
+  historyIndex: -1,
+  isEvaluating: false,
+
+  // Actions
+  setConnected: (connected, sessionId) =>
+    set({ connected, sessionId: sessionId ?? null }),
+
+  addEntry: (entry) =>
+    set((state) => ({
+      history: [
+        ...state.history,
+        { ...entry, id: crypto.randomUUID(), timestamp: Date.now() },
+      ],
+      commandHistory:
+        entry.type === 'command' && entry.code
+          ? [...state.commandHistory, entry.code]
+          : state.commandHistory,
+      historyIndex: -1,
+    })),
+
+  clearHistory: () => set({ history: [], historyIndex: -1 }),
+
+  setEvaluating: (isEvaluating) => set({ isEvaluating }),
+
+  navigateHistory: (direction) => {
+    const { commandHistory, historyIndex } = get();
+    if (commandHistory.length === 0) return null;
+
+    let newIndex: number;
+    if (direction === 'up') {
+      newIndex = historyIndex === -1
+        ? commandHistory.length - 1
+        : Math.max(0, historyIndex - 1);
+    } else {
+      newIndex = historyIndex === -1
+        ? -1
+        : Math.min(commandHistory.length - 1, historyIndex + 1);
+    }
+
+    set({ historyIndex: newIndex });
+    return newIndex >= 0 ? commandHistory[newIndex] : null;
+  },
+}));
+```
+
+#### React Entry (`webview/main.tsx`)
+
+```tsx
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import { App } from './App';
+import './styles/konsol.css';
+
+// Import vscode-elements (React 19 native web component support)
+import '@vscode-elements/elements/dist/vscode-button';
+import '@vscode-elements/elements/dist/vscode-icon';
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <App />
+  </StrictMode>
+);
+```
+
+#### App Component (`webview/App.tsx`)
+
+```tsx
+import { useEffect } from 'react';
+import { Output } from './components/Output';
+import { Editor } from './components/Editor';
+import { StatusBar } from './components/StatusBar';
+import { useKonsolStore } from './stores/konsol-store';
+import { vscode } from './lib/vscode-api';
+
+export function App() {
+  const { setConnected, addEntry, setEvaluating } = useKonsolStore();
+
+  useEffect(() => {
+    // Listen for messages from extension host
+    const handleMessage = (event: MessageEvent) => {
+      const message = event.data;
+
+      switch (message.type) {
+        case 'connected':
+          setConnected(true, message.sessionId);
+          break;
+        case 'disconnected':
+          setConnected(false);
+          break;
+        case 'evalResult':
+          setEvaluating(false);
+          addEntry({ type: 'result', result: message.data });
+          break;
+        case 'evalError':
+          setEvaluating(false);
+          addEntry({ type: 'error', result: message.data });
+          break;
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [setConnected, addEntry, setEvaluating]);
+
+  const handleEval = (code: string) => {
+    if (!code.trim()) return;
+
+    addEntry({ type: 'command', code });
+    setEvaluating(true);
+    vscode.postMessage({ type: 'eval', code });
+  };
+
+  return (
+    <div className="konsol-container">
+      <Output />
+      <Editor onEval={handleEval} />
+      <StatusBar />
+    </div>
+  );
+}
+```
+
+#### Editor Component with Monaco (`webview/components/Editor.tsx`)
+
+```tsx
+import { useRef, useCallback } from 'react';
+import MonacoEditor, { type OnMount } from '@monaco-editor/react';
+import { useKonsolStore } from '../stores/konsol-store';
+
+interface EditorProps {
+  onEval: (code: string) => void;
+}
+
+export function Editor({ onEval }: EditorProps) {
+  const editorRef = useRef<any>(null);
+  const { isEvaluating, navigateHistory } = useKonsolStore();
+
+  const handleMount: OnMount = (editor, monaco) => {
+    editorRef.current = editor;
+
+    // Ctrl/Cmd+Enter to evaluate
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
+      const code = editor.getValue();
+      onEval(code);
+      editor.setValue('');
+    });
+
+    // Up arrow for history
+    editor.addCommand(monaco.KeyCode.UpArrow, () => {
+      const prev = navigateHistory('up');
+      if (prev !== null) editor.setValue(prev);
+    });
+
+    // Down arrow for history
+    editor.addCommand(monaco.KeyCode.DownArrow, () => {
+      const next = navigateHistory('down');
+      if (next !== null) editor.setValue(next);
+    });
+
+    editor.focus();
+  };
+
+  const handleRun = useCallback(() => {
+    if (editorRef.current) {
+      const code = editorRef.current.getValue();
+      onEval(code);
+      editorRef.current.setValue('');
+    }
+  }, [onEval]);
+
+  return (
+    <div className="konsol-input-wrapper">
+      <div className="konsol-editor">
+        <MonacoEditor
+          height="60px"
+          language="ruby"
+          theme="vs-dark"
+          options={{
+            minimap: { enabled: false },
+            lineNumbers: 'off',
+            glyphMargin: false,
+            folding: false,
+            lineDecorationsWidth: 0,
+            lineNumbersMinChars: 0,
+            scrollBeyondLastLine: false,
+            automaticLayout: true,
+            fontSize: 14,
+            fontFamily: 'var(--vscode-editor-font-family)',
+          }}
+          onMount={handleMount}
+        />
+      </div>
+      {/* React 19: native web component support */}
+      <vscode-button
+        appearance="icon"
+        class="konsol-run-btn"
+        disabled={isEvaluating}
+        onClick={handleRun}
+        title="Run (Ctrl+Enter)"
+      >
+        <span className="codicon codicon-play" />
+      </vscode-button>
+    </div>
+  );
+}
+```
+
+#### Output Component (`webview/components/Output.tsx`)
+
+```tsx
+import { useEffect, useRef } from 'react';
+import { useKonsolStore } from '../stores/konsol-store';
+import { OutputEntry } from './OutputEntry';
+
+export function Output() {
+  const { history } = useKonsolStore();
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom on new entries
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [history]);
+
+  return (
+    <div className="konsol-output">
+      {history.map((entry) => (
+        <OutputEntry key={entry.id} entry={entry} />
+      ))}
+      <div ref={bottomRef} />
+    </div>
+  );
+}
+```
+
+#### VSCode API Wrapper (`webview/lib/vscode-api.ts`)
+
+```typescript
+interface VSCodeAPI {
+  postMessage: (message: unknown) => void;
+  getState: () => unknown;
+  setState: (state: unknown) => void;
+}
+
+// Acquire once, reuse everywhere
+export const vscode: VSCodeAPI = acquireVsCodeApi();
+```
+
+#### Styling (`webview/styles/konsol.css`)
 
 ```css
-/* Uses native VSCode theme colors */
+/* Uses native VSCode theme colors - see VSCODE_EXTENSION_BEST_PRACTICES.md */
 .konsol-container {
   height: 100%;
   display: flex;
@@ -263,8 +561,15 @@ The webview contains:
 
 .konsol-input-wrapper {
   display: flex;
+  align-items: center;
+  gap: 4px;
   border-top: 1px solid var(--vscode-panel-border);
+  padding: 8px;
   background: var(--vscode-input-background);
+}
+
+.konsol-editor {
+  flex: 1;
 }
 
 /* Terminal-style output colors */
@@ -459,14 +764,21 @@ Use [@codingame/monaco-vscode-api](https://github.com/CodinGame/monaco-vscode-ap
     }
   },
   "dependencies": {
-    "vscode-jsonrpc": "^8.2.0",
-    "@vscode-elements/elements": "^1.0.0",
-    "@vscode/codicons": "^0.0.36"
+    "vscode-jsonrpc": "^8.2.0"
   },
   "devDependencies": {
     "@types/vscode": "^1.85.0",
-    "typescript": "^5.3.0",
-    "esbuild": "^0.19.0"
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.3.0"
+  },
+  "webviewDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zustand": "^5.0.0",
+    "@monaco-editor/react": "^4.6.0",
+    "@vscode-elements/elements": "^1.6.0",
+    "@vscode/codicons": "^0.0.36"
   }
 }
 ```
@@ -479,25 +791,48 @@ Use [@codingame/monaco-vscode-api](https://github.com/CodinGame/monaco-vscode-ap
 vscode-konsol/
 ├── package.json
 ├── tsconfig.json
-├── esbuild.config.js
-├── src/
+├── tsconfig.webview.json         # Separate config for React webview
+├── bun.lock
+├── build.ts                      # Bun build script
+│
+├── src/                          # Extension Host (Node.js)
 │   ├── extension.ts              # Entry point, activation
 │   ├── konsol-client.ts          # JSON-RPC client for konsol
 │   ├── konsol-view-provider.ts   # WebviewViewProvider
 │   ├── completion-provider.ts    # LSP delegation / custom completions
 │   ├── virtual-document.ts       # Virtual document for LSP bridging
 │   └── types.ts                  # Shared type definitions
-├── webview/
-│   ├── index.html                # Webview HTML template
-│   ├── main.ts                   # Webview entry point
-│   ├── monaco-setup.ts           # Monaco editor configuration
-│   ├── output-renderer.ts        # Render results/history
-│   └── styles.css                # Webview styles
+│
+├── webview/                      # React 19 Webview (Browser)
+│   ├── index.html                # HTML template with React root
+│   ├── main.tsx                  # React entry point
+│   ├── App.tsx                   # Root component
+│   ├── components/
+│   │   ├── Output.tsx            # Command history display
+│   │   ├── OutputEntry.tsx       # Single output entry (prompt, result, error)
+│   │   ├── Editor.tsx            # Monaco editor wrapper
+│   │   ├── StatusBar.tsx         # Connection status, session info
+│   │   └── Toolbar.tsx           # Run button, clear, etc.
+│   ├── stores/
+│   │   ├── konsol-store.ts       # Zustand store for session state
+│   │   └── types.ts              # Store types
+│   ├── hooks/
+│   │   ├── use-vscode-api.ts     # VSCode API hook
+│   │   └── use-konsol.ts         # Konsol actions hook
+│   ├── lib/
+│   │   └── vscode-api.ts         # acquireVsCodeApi wrapper
+│   └── styles/
+│       └── konsol.css            # Styles using VSCode CSS variables
+│
+├── shared/                       # Shared between extension and webview
+│   └── types.ts                  # Message types, EvalResult, etc.
+│
 ├── resources/
 │   └── icons/
+│
 └── test/
     ├── extension.test.ts
-    └── client.test.ts
+    └── webview.test.tsx
 ```
 
 ---
@@ -505,17 +840,20 @@ vscode-konsol/
 ## Implementation Phases
 
 ### Phase 1: Core Functionality (MVP)
-1. Extension scaffolding with WebviewViewProvider
-2. Basic HTML/CSS UI (no Monaco yet, use textarea)
-3. Konsol client with JSON-RPC over stdio
-4. Basic eval flow: input → konsol → output display
-5. Session lifecycle (start/stop)
+1. Project scaffolding with Bun, React 19, TypeScript
+2. Extension host with WebviewViewProvider
+3. React webview with basic UI (Output + simple textarea input)
+4. Zustand store for state management
+5. Konsol client with JSON-RPC over stdio
+6. Basic eval flow: input → konsol → output display
+7. Session lifecycle (start/stop/reconnect)
 
 ### Phase 2: Monaco Integration
-1. Bundle Monaco editor for webview
+1. Replace textarea with `@monaco-editor/react`
 2. Ruby syntax highlighting
 3. Multi-line input support
 4. Command history (up/down arrows)
+5. Keyboard shortcuts (Ctrl+Enter to run)
 
 ### Phase 3: Autocomplete
 1. Static Ruby/Rails completions
@@ -523,17 +861,17 @@ vscode-konsol/
 3. LSP delegation for full intellisense (if Ruby LSP installed)
 
 ### Phase 4: Polish
-1. Themes matching VSCode
+1. Native theming with VSCode CSS variables
 2. Rich output formatting (syntax-highlighted results)
 3. Error stack trace links (click to open file)
 4. Inline object inspection
-5. Keyboard shortcuts
+5. Loading states and error handling
 
 ### Phase 5: Advanced Features
-1. Multiple sessions
+1. Multiple sessions (tabs)
 2. Code snippets
-3. History persistence
-4. "Eval selection" from editor
+3. History persistence (via `vscode.setState`)
+4. "Eval selection" from editor (context menu)
 5. Integration with Ruby debugger
 
 ---
@@ -581,55 +919,78 @@ const writer = new StreamMessageWriter(process.stdin);
 - `vscode-jsonrpc`: JSON-RPC 2.0 with LSP framing
 - `@types/vscode`: VSCode API types
 
-### Webview
-- `monaco-editor`: Code editor (AMD bundle for browser)
-- `@vscode-elements/elements`: Native-looking UI components (buttons, inputs, etc.)
+### Webview (React 19)
+- `react` + `react-dom`: UI framework (v19 for native web component support)
+- `zustand`: Lightweight state management
+- `@monaco-editor/react`: Monaco editor React wrapper
+- `@vscode-elements/elements`: Native-looking UI components
 - `@vscode/codicons`: VSCode icon font
 
 ### Build Tools
+- `bun`: Package manager and build runner
 - `typescript`: Type checking
-- `esbuild`: Fast bundling for extension and webview
+- `esbuild`: Fast bundling (via Bun)
 
 > **Note:** The `@vscode/webview-ui-toolkit` was deprecated Jan 2025. Use `@vscode-elements/elements` instead.
+>
+> **React 19 + Web Components:** No wrapper needed — use `<vscode-button>` directly in JSX.
 
 ---
 
 ## References
 
+### Project Documentation
 - [VSCODE_EXTENSION_BEST_PRACTICES.md](./VSCODE_EXTENSION_BEST_PRACTICES.md) — CSS variables, theming, security, performance
+
+### VSCode Extension
 - [VSCode Webview API](https://code.visualstudio.com/api/extension-guides/webview)
 - [VSCode Theme Color Reference](https://code.visualstudio.com/api/references/theme-color)
 - [VSCode Panel Guidelines](https://code.visualstudio.com/api/ux-guidelines/panel)
-- [vscode-elements](https://vscode-elements.github.io/) — UI component library
 - [vscode-jsonrpc](https://www.npmjs.com/package/vscode-jsonrpc)
-- [Ruby LSP VSCode Extension](https://github.com/Shopify/vscode-ruby-lsp)
+
+### React & State
+- [React 19](https://react.dev/) — Native web component support
+- [Zustand](https://zustand-demo.pmnd.rs/) — Lightweight state management
+- [vscode-elements React Guide](https://vscode-elements.github.io/guides/framework-integrations/react/)
+
+### Monaco Editor
 - [Monaco Editor](https://microsoft.github.io/monaco-editor/)
+- [@monaco-editor/react](https://github.com/suren-atoyan/monaco-react)
 - [monaco-vscode-api](https://github.com/CodinGame/monaco-vscode-api) (advanced integration)
+
+### UI Components
+- [vscode-elements](https://vscode-elements.github.io/) — UI component library
+- [@vscode/codicons](https://microsoft.github.io/vscode-codicons/)
+
+### Ruby
+- [Ruby LSP VSCode Extension](https://github.com/Shopify/vscode-ruby-lsp)
+
+### Build Tools
+- [Bun](https://bun.sh/) — Package manager and runtime
 
 ---
 
 ## Open Questions
 
-1. **Monaco vs Textarea for MVP?**
-   - Textarea is simpler but Monaco provides better UX
-   - Recommendation: Start with textarea, add Monaco in Phase 2
+1. **Monaco bundle size**
+   - `@monaco-editor/react` lazy-loads Monaco from CDN by default
+   - Alternative: Bundle locally for offline support (adds ~2MB)
+   - Decision: Use CDN for now, reconsider if offline needed
 
-2. **Bundling Monaco?**
-   - Monaco is large (~2MB). Options:
-     - Bundle in extension (larger extension size)
-     - Load from CDN (requires network)
-     - Use VSCode's built-in Monaco (complex, requires monaco-vscode-api)
-
-3. **LSP Delegation complexity?**
+2. **LSP Delegation complexity?**
    - Virtual document approach requires Ruby LSP to be active
    - May need fallback for projects without Ruby LSP
    - Consider making it optional enhancement
 
-4. **Multi-root workspace support?**
+3. **Multi-root workspace support?**
    - Which Rails project to connect to?
    - Show project selector or use active editor's project
 
-5. **Remote development (SSH, WSL, Containers)?**
+4. **Remote development (SSH, WSL, Containers)?**
    - Extension must spawn konsol on remote, not local
    - Use `vscode.env.remoteName` to detect
    - May need special handling for path resolution
+
+5. **React 19 web component types?**
+   - Need to add type declarations for `<vscode-button>` etc.
+   - Create `vscode-elements.d.ts` with JSX.IntrinsicElements extensions
