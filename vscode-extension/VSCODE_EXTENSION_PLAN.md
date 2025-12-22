@@ -1574,11 +1574,6 @@ main().catch(e => {
 }
 ```
 
-**Note:** The current bootstrap uses `pnpm`. To switch to `npm`:
-1. Delete `pnpm-lock.yaml`
-2. Run `npm install` to generate `package-lock.json`
-3. Replace `pnpm run` with `npm run` in package.json scripts
-
 ### TypeScript Configs
 
 **tsconfig.json** (Extension Host):
