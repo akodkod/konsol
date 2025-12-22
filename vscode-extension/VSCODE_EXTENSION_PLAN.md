@@ -1694,8 +1694,6 @@ main().catch((e) => {
 }
 ```
 
-**Note:** Use `npm` as the package manager for best vsce compatibility. The scripts already use `npm run` commands.
-
 ### TypeScript Configs
 
 **tsconfig.json** (Extension Host):
