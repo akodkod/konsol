@@ -22,6 +22,7 @@ The extension provides a **custom terminal-like bottom panel** in VSCode for Rai
 | **Extension Host** | TypeScript | VSCode extension runtime (Node.js) |
 | **Webview UI** | React 19 | Component-based UI with native web component support |
 | **State Management** | Zustand | Lightweight global store for webview state |
+| **Schema Validation** | Zod | Runtime validation + TypeScript type inference |
 | **Code Editor** | Monaco + @monaco-editor/react | Rich code input with syntax highlighting |
 | **UI Components** | vscode-elements | Native VSCode look via web components |
 | **Communication** | vscode-jsonrpc | JSON-RPC 2.0 with LSP framing |
@@ -31,6 +32,7 @@ The extension provides a **custom terminal-like bottom panel** in VSCode for Rai
 
 - **React 19**: Native web component support — use `<vscode-button>` directly without wrappers
 - **Zustand**: Minimal boilerplate, works great with React, easy persistence via `getState()`/`setState()`
+- **Zod**: Runtime validation of JSON-RPC messages with automatic TypeScript type inference via `z.infer<>`
 - **Bun**: Faster than npm/yarn, built-in TypeScript support, simpler scripts
 
 ---
@@ -255,9 +257,15 @@ The webview is a React 19 application with Zustand for state management.
 
 #### Zustand Store (`webview/stores/konsol-store.ts`)
 
+The store is **encapsulated** — only hooks and mutators are exported, never the store itself. This enforces controlled access patterns and makes the API surface explicit.
+
 ```typescript
 import { create } from 'zustand';
-import type { EvalResult, StdoutParams, StderrParams } from '../../shared/types';
+import type { EvalResult } from '../../shared/types';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface OutputEntry {
   id: string;
@@ -278,65 +286,88 @@ interface KonsolState {
   commandHistory: string[];
   historyIndex: number;
   isEvaluating: boolean;
-
-  // Actions
-  setConnected: (connected: boolean, sessionId?: string) => void;
-  addEntry: (entry: Omit<OutputEntry, 'id' | 'timestamp'>) => void;
-  clearHistory: () => void;
-  setEvaluating: (isEvaluating: boolean) => void;
-  navigateHistory: (direction: 'up' | 'down') => string | null;
 }
 
-export const useKonsolStore = create<KonsolState>((set, get) => ({
-  // Initial state
+// ─────────────────────────────────────────────────────────────────────────────
+// Store (private — NOT exported)
+// ─────────────────────────────────────────────────────────────────────────────
+
+const store = create<KonsolState>()(() => ({
   connected: false,
   sessionId: null,
   history: [],
   commandHistory: [],
   historyIndex: -1,
   isEvaluating: false,
-
-  // Actions
-  setConnected: (connected, sessionId) =>
-    set({ connected, sessionId: sessionId ?? null }),
-
-  addEntry: (entry) =>
-    set((state) => ({
-      history: [
-        ...state.history,
-        { ...entry, id: crypto.randomUUID(), timestamp: Date.now() },
-      ],
-      commandHistory:
-        entry.type === 'command' && entry.code
-          ? [...state.commandHistory, entry.code]
-          : state.commandHistory,
-      historyIndex: -1,
-    })),
-
-  clearHistory: () => set({ history: [], historyIndex: -1 }),
-
-  setEvaluating: (isEvaluating) => set({ isEvaluating }),
-
-  navigateHistory: (direction) => {
-    const { commandHistory, historyIndex } = get();
-    if (commandHistory.length === 0) return null;
-
-    let newIndex: number;
-    if (direction === 'up') {
-      newIndex = historyIndex === -1
-        ? commandHistory.length - 1
-        : Math.max(0, historyIndex - 1);
-    } else {
-      newIndex = historyIndex === -1
-        ? -1
-        : Math.min(commandHistory.length - 1, historyIndex + 1);
-    }
-
-    set({ historyIndex: newIndex });
-    return newIndex >= 0 ? commandHistory[newIndex] : null;
-  },
 }));
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Selectors (exported hooks)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const useConnected = () => store((s) => s.connected);
+export const useSessionId = () => store((s) => s.sessionId);
+export const useHistory = () => store((s) => s.history);
+export const useCommandHistory = () => store((s) => s.commandHistory);
+export const useHistoryIndex = () => store((s) => s.historyIndex);
+export const useIsEvaluating = () => store((s) => s.isEvaluating);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mutators (exported actions)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const setConnected = (connected: boolean, sessionId?: string) => {
+  store.setState({ connected, sessionId: sessionId ?? null });
+};
+
+export const addEntry = (entry: Omit<OutputEntry, 'id' | 'timestamp'>) => {
+  store.setState((state) => ({
+    history: [
+      ...state.history,
+      { ...entry, id: crypto.randomUUID(), timestamp: Date.now() },
+    ],
+    commandHistory:
+      entry.type === 'command' && entry.code
+        ? [...state.commandHistory, entry.code]
+        : state.commandHistory,
+    historyIndex: -1,
+  }));
+};
+
+export const clearHistory = () => {
+  store.setState({ history: [], historyIndex: -1 });
+};
+
+export const setEvaluating = (isEvaluating: boolean) => {
+  store.setState({ isEvaluating });
+};
+
+export const navigateHistory = (direction: 'up' | 'down'): string | null => {
+  const { commandHistory, historyIndex } = store.getState();
+  if (commandHistory.length === 0) return null;
+
+  let newIndex: number;
+  if (direction === 'up') {
+    newIndex = historyIndex === -1
+      ? commandHistory.length - 1
+      : Math.max(0, historyIndex - 1);
+  } else {
+    newIndex = historyIndex === -1
+      ? -1
+      : Math.min(commandHistory.length - 1, historyIndex + 1);
+  }
+
+  store.setState({ historyIndex: newIndex });
+  return newIndex >= 0 ? commandHistory[newIndex] : null;
+};
 ```
+
+**Benefits of this pattern:**
+- Store internals are encapsulated — no direct access to `set()` or `get()`
+- Components only import what they need: `useHistory()`, `addEntry()`, etc.
+- Mutators can be used outside React components (e.g., in message handlers)
+- Easier to test — mock individual functions instead of the whole store
+- Clear separation: hooks for reading, functions for writing
 
 #### React Entry (`webview/main.tsx`)
 
@@ -364,30 +395,34 @@ import { useEffect } from 'react';
 import { Output } from './components/Output';
 import { Editor } from './components/Editor';
 import { StatusBar } from './components/StatusBar';
-import { useKonsolStore } from './stores/konsol-store';
+import { setConnected, addEntry, setEvaluating } from './stores/konsol-store';
 import { vscode } from './lib/vscode-api';
-import type { ExtensionMessage } from '../../shared/types';
+import { parseExtensionMessage, ExtensionMessageType } from '../../shared/events';
 
 export function App() {
-  const { setConnected, addEntry, setEvaluating } = useKonsolStore();
-
   useEffect(() => {
     // Listen for messages from extension host
-    const handleMessage = (event: MessageEvent<ExtensionMessage>) => {
-      const message = event.data;
+    const handleMessage = (event: MessageEvent<unknown>) => {
+      // Validate message with Zod schema
+      const result = parseExtensionMessage(event.data);
+      if (!result.success) {
+        console.error('Invalid message from extension:', result.error);
+        return;
+      }
+
+      const message = result.data;
 
       switch (message.type) {
-        case 'connected':
+        case ExtensionMessageType.Connected:
           setConnected(true, message.sessionId);
           break;
 
-        case 'disconnected':
+        case ExtensionMessageType.Disconnected:
           setConnected(false);
           break;
 
-        case 'evalResult':
+        case ExtensionMessageType.EvalResult:
           setEvaluating(false);
-          // Check if result has exception
           if (message.data.exception) {
             addEntry({ type: 'error', result: message.data });
           } else {
@@ -395,23 +430,19 @@ export function App() {
           }
           break;
 
-        case 'stdout':
-          // Streaming stdout from konsol/stdout notification
+        case ExtensionMessageType.Stdout:
           addEntry({ type: 'stdout', chunk: message.data.chunk });
           break;
 
-        case 'stderr':
-          // Streaming stderr from konsol/stderr notification
+        case ExtensionMessageType.Stderr:
           addEntry({ type: 'stderr', chunk: message.data.chunk });
           break;
 
-        case 'status':
-          // Session busy status from konsol/status notification
+        case ExtensionMessageType.Status:
           setEvaluating(message.data.busy);
           break;
 
-        case 'error':
-          // JSON-RPC error
+        case ExtensionMessageType.Error:
           setEvaluating(false);
           addEntry({
             type: 'error',
@@ -436,7 +467,7 @@ export function App() {
     vscode.postMessage({ type: 'ready' });
 
     return () => window.removeEventListener('message', handleMessage);
-  }, [setConnected, addEntry, setEvaluating]);
+  }, []); // No dependencies — mutators are stable module-level functions
 
   const handleEval = (code: string) => {
     if (!code.trim()) return;
@@ -461,7 +492,7 @@ export function App() {
 ```tsx
 import { useRef, useCallback } from 'react';
 import MonacoEditor, { type OnMount } from '@monaco-editor/react';
-import { useKonsolStore } from '../stores/konsol-store';
+import { useIsEvaluating, navigateHistory } from '../stores/konsol-store';
 
 interface EditorProps {
   onEval: (code: string) => void;
@@ -469,7 +500,7 @@ interface EditorProps {
 
 export function Editor({ onEval }: EditorProps) {
   const editorRef = useRef<any>(null);
-  const { isEvaluating, navigateHistory } = useKonsolStore();
+  const isEvaluating = useIsEvaluating();
 
   const handleMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
@@ -545,11 +576,11 @@ export function Editor({ onEval }: EditorProps) {
 
 ```tsx
 import { useEffect, useRef } from 'react';
-import { useKonsolStore } from '../stores/konsol-store';
+import { useHistory } from '../stores/konsol-store';
 import { OutputEntry } from './OutputEntry';
 
 export function Output() {
-  const { history } = useKonsolStore();
+  const history = useHistory();
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom on new entries
@@ -624,35 +655,37 @@ export const vscode: VSCodeAPI = acquireVsCodeApi();
 
 ---
 
-### 5. Shared Protocol Types (`shared/types.ts`)
+### 5. Shared Protocol Types
 
-TypeScript types matching the konsol gem's Sorbet structs. All JSON keys use **camelCase** (converted from Ruby's snake_case at protocol boundary).
+Types are split into two files:
+- `shared/types.ts` — TypeScript types matching the konsol gem's Sorbet structs
+- `shared/events.ts` — Zod schemas for runtime validation with inferred types
 
-#### JSON-RPC Method Names
+All JSON keys use **camelCase** (converted from Ruby's snake_case at protocol boundary).
+
+#### JSON-RPC Method Names (`shared/types.ts`)
 
 ```typescript
 /**
  * JSON-RPC method names - must match Konsol::Protocol::Method enum
  */
-export const KonsolMethod = {
+export enum KonsolMethod {
   // Lifecycle
-  Initialize: 'initialize',
-  Shutdown: 'shutdown',
-  Exit: 'exit',
-  CancelRequest: '$/cancelRequest',
+  Initialize = 'initialize',
+  Shutdown = 'shutdown',
+  Exit = 'exit',
+  CancelRequest = '$/cancelRequest',
 
   // Console
-  SessionCreate: 'konsol/session.create',
-  Eval: 'konsol/eval',
-  Interrupt: 'konsol/interrupt',
+  SessionCreate = 'konsol/session.create',
+  Eval = 'konsol/eval',
+  Interrupt = 'konsol/interrupt',
 
   // Notifications (server → client)
-  Stdout: 'konsol/stdout',
-  Stderr: 'konsol/stderr',
-  Status: 'konsol/status',
-} as const;
-
-export type KonsolMethodType = (typeof KonsolMethod)[keyof typeof KonsolMethod];
+  Stdout = 'konsol/stdout',
+  Stderr = 'konsol/stderr',
+  Status = 'konsol/status',
+}
 ```
 
 #### Error Codes
@@ -661,23 +694,21 @@ export type KonsolMethodType = (typeof KonsolMethod)[keyof typeof KonsolMethod];
 /**
  * JSON-RPC error codes - must match Konsol::Protocol::ErrorCode enum
  */
-export const ErrorCode = {
+export enum ErrorCode {
   // Standard JSON-RPC
-  ParseError: -32700,
-  InvalidRequest: -32600,
-  MethodNotFound: -32601,
-  InvalidParams: -32602,
-  InternalError: -32603,
+  ParseError = -32700,
+  InvalidRequest = -32600,
+  MethodNotFound = -32601,
+  InvalidParams = -32602,
+  InternalError = -32603,
 
   // Konsol-specific
-  SessionNotFound: -32001,
-  SessionBusy: -32002,
-  RailsBootFailed: -32003,
-  EvalTimeout: -32004,
-  ServerShuttingDown: -32005,
-} as const;
-
-export type ErrorCodeType = (typeof ErrorCode)[keyof typeof ErrorCode];
+  SessionNotFound = -32001,
+  SessionBusy = -32002,
+  RailsBootFailed = -32003,
+  EvalTimeout = -32004,
+  ServerShuttingDown = -32005,
+}
 ```
 
 #### Request Parameter Types
@@ -863,31 +894,195 @@ export interface RpcNotification<P = unknown> {
 }
 ```
 
-#### Extension ↔ Webview Messages
+#### Extension ↔ Webview Message Types (`shared/types.ts`)
 
 ```typescript
 /**
- * Messages from extension host to webview
+ * Message types for extension → webview communication
  */
-export type ExtensionMessage =
-  | { type: 'connected'; sessionId: string }
-  | { type: 'disconnected'; reason?: string }
-  | { type: 'evalResult'; data: EvalResult }
-  | { type: 'stdout'; data: StdoutParams }
-  | { type: 'stderr'; data: StderrParams }
-  | { type: 'status'; data: StatusParams }
-  | { type: 'error'; error: RpcError };
+export enum ExtensionMessageType {
+  Connected = 'connected',
+  Disconnected = 'disconnected',
+  EvalResult = 'evalResult',
+  Stdout = 'stdout',
+  Stderr = 'stderr',
+  Status = 'status',
+  Error = 'error',
+}
 
 /**
- * Messages from webview to extension host
+ * Message types for webview → extension communication
  */
-export type WebviewMessage =
-  | { type: 'ready' }
-  | { type: 'eval'; code: string }
-  | { type: 'interrupt' }
-  | { type: 'clear' }
-  | { type: 'requestCompletions'; code: string; position: number };
+export enum WebviewMessageType {
+  Ready = 'ready',
+  Eval = 'eval',
+  Interrupt = 'interrupt',
+  Clear = 'clear',
+  RequestCompletions = 'requestCompletions',
+}
 ```
+
+#### Zod Schemas for Event Validation (`shared/events.ts`)
+
+Zod schemas provide runtime validation and automatic TypeScript type inference via `z.infer<>`.
+
+```typescript
+import { z } from 'zod';
+import { ExtensionMessageType, WebviewMessageType, ErrorCode } from './types';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared Schemas
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ExceptionInfoSchema = z.object({
+  className: z.string(),
+  message: z.string(),
+  backtrace: z.array(z.string()),
+});
+
+const EvalResultSchema = z.object({
+  value: z.string(),
+  valueType: z.string().optional(),
+  stdout: z.string(),
+  stderr: z.string(),
+  exception: ExceptionInfoSchema.optional(),
+});
+
+const StdoutParamsSchema = z.object({
+  sessionId: z.string(),
+  chunk: z.string(),
+});
+
+const StderrParamsSchema = z.object({
+  sessionId: z.string(),
+  chunk: z.string(),
+});
+
+const StatusParamsSchema = z.object({
+  sessionId: z.string(),
+  busy: z.boolean(),
+});
+
+const RpcErrorSchema = z.object({
+  code: z.nativeEnum(ErrorCode),
+  message: z.string(),
+  data: z.record(z.unknown()).optional(),
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Extension → Webview Messages
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ConnectedMessageSchema = z.object({
+  type: z.literal(ExtensionMessageType.Connected),
+  sessionId: z.string(),
+});
+
+const DisconnectedMessageSchema = z.object({
+  type: z.literal(ExtensionMessageType.Disconnected),
+  reason: z.string().optional(),
+});
+
+const EvalResultMessageSchema = z.object({
+  type: z.literal(ExtensionMessageType.EvalResult),
+  data: EvalResultSchema,
+});
+
+const StdoutMessageSchema = z.object({
+  type: z.literal(ExtensionMessageType.Stdout),
+  data: StdoutParamsSchema,
+});
+
+const StderrMessageSchema = z.object({
+  type: z.literal(ExtensionMessageType.Stderr),
+  data: StderrParamsSchema,
+});
+
+const StatusMessageSchema = z.object({
+  type: z.literal(ExtensionMessageType.Status),
+  data: StatusParamsSchema,
+});
+
+const ErrorMessageSchema = z.object({
+  type: z.literal(ExtensionMessageType.Error),
+  error: RpcErrorSchema,
+});
+
+export const ExtensionMessageSchema = z.discriminatedUnion('type', [
+  ConnectedMessageSchema,
+  DisconnectedMessageSchema,
+  EvalResultMessageSchema,
+  StdoutMessageSchema,
+  StderrMessageSchema,
+  StatusMessageSchema,
+  ErrorMessageSchema,
+]);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Webview → Extension Messages
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ReadyMessageSchema = z.object({
+  type: z.literal(WebviewMessageType.Ready),
+});
+
+const EvalMessageSchema = z.object({
+  type: z.literal(WebviewMessageType.Eval),
+  code: z.string(),
+});
+
+const InterruptMessageSchema = z.object({
+  type: z.literal(WebviewMessageType.Interrupt),
+});
+
+const ClearMessageSchema = z.object({
+  type: z.literal(WebviewMessageType.Clear),
+});
+
+const RequestCompletionsMessageSchema = z.object({
+  type: z.literal(WebviewMessageType.RequestCompletions),
+  code: z.string(),
+  position: z.number(),
+});
+
+export const WebviewMessageSchema = z.discriminatedUnion('type', [
+  ReadyMessageSchema,
+  EvalMessageSchema,
+  InterruptMessageSchema,
+  ClearMessageSchema,
+  RequestCompletionsMessageSchema,
+]);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Inferred Types (use these instead of manual type definitions)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type ExtensionMessage = z.infer<typeof ExtensionMessageSchema>;
+export type WebviewMessage = z.infer<typeof WebviewMessageSchema>;
+export type EvalResult = z.infer<typeof EvalResultSchema>;
+export type ExceptionInfo = z.infer<typeof ExceptionInfoSchema>;
+export type RpcError = z.infer<typeof RpcErrorSchema>;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Validation Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const parseExtensionMessage = (data: unknown) =>
+  ExtensionMessageSchema.safeParse(data);
+
+export const parseWebviewMessage = (data: unknown) =>
+  WebviewMessageSchema.safeParse(data);
+
+// Re-export enums for convenience
+export { ExtensionMessageType, WebviewMessageType } from './types';
+```
+
+**Benefits of Zod schemas:**
+- Runtime validation of messages from webview/extension boundary
+- Types are inferred from schemas — single source of truth
+- `safeParse()` returns discriminated result with typed errors
+- `z.discriminatedUnion()` enables exhaustive switch statements
+- Schemas can be composed and reused
 
 ---
 
@@ -1073,7 +1268,8 @@ Use [@codingame/monaco-vscode-api](https://github.com/CodinGame/monaco-vscode-ap
     }
   },
   "dependencies": {
-    "vscode-jsonrpc": "^8.2.0"
+    "vscode-jsonrpc": "^8.2.0",
+    "zod": "^3.23.0"
   },
   "devDependencies": {
     "@types/vscode": "^1.85.0",
@@ -1134,7 +1330,8 @@ vscode-konsol/
 │       └── konsol.css            # Styles using VSCode CSS variables
 │
 ├── shared/                       # Shared between extension and webview
-│   └── types.ts                  # Message types, EvalResult, etc.
+│   ├── types.ts                  # Enums, interfaces (no runtime validation)
+│   └── events.ts                 # Zod schemas, inferred types, validators
 │
 ├── resources/
 │   └── icons/
@@ -1383,11 +1580,13 @@ const writer = new StreamMessageWriter(process.stdin);
 
 ### Extension Host (Node.js)
 - `vscode-jsonrpc`: JSON-RPC 2.0 with LSP framing
+- `zod`: Runtime validation and type inference
 - `@types/vscode`: VSCode API types
 
 ### Webview (React 19)
 - `react` + `react-dom`: UI framework (v19 for native web component support)
 - `zustand`: Lightweight state management
+- `zod`: Runtime validation and type inference (shared with extension)
 - `@monaco-editor/react`: Monaco editor React wrapper
 - `@vscode-elements/elements`: Native-looking UI components
 - `@vscode/codicons`: VSCode icon font
