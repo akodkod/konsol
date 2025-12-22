@@ -7,20 +7,22 @@
 		],
 		"sourceMap": true,
 		"rootDir": "src",
-		
+		"outDir": "out",
+
 		/* Linting */
 		"skipLibCheck": true,
 		"strict": true,
 		"noUnusedLocals": true,
 		"noUnusedParameters": true,
 		"noFallthroughCasesInSwitch": true,
-		"noUncheckedSideEffectImports": true,
-
-		/* Paths */
-		"paths": {
-			"@/*": [
-				"./src/*"
-			],
-		},
-	}
+		"noUncheckedSideEffectImports": true
+	},
+	"include": [
+		"src/**/*"
+	],
+	"exclude": [
+		"node_modules",
+		"dist",
+		"out"
+	]
 }

@@ -114,7 +114,7 @@ Use VSCode's `WebviewViewProvider` API to create a custom view in the bottom pan
 
 ```typescript
 // Activation events:
-// - workspaceContains:**/Gemfile (contains 'konsol' or 'rails')
+// - workspaceContains:**/config/environment.rb (more specific than Gemfile)
 // - onView:konsol.panel
 // - onCommand:konsol.start
 
@@ -1097,9 +1097,9 @@ export { ExtensionMessageType, WebviewMessageType } from './types';
   "engines": { "vscode": "^1.85.0" },
   "categories": ["Other", "Debuggers"],
   "activationEvents": [
-    "workspaceContains:**/Gemfile"
+    "workspaceContains:**/config/environment.rb"
   ],
-  "main": "./out/extension.js",
+  "main": "./dist/extension.js",
   "contributes": {
     "viewsContainers": {
       "panel": [
@@ -1177,21 +1177,21 @@ export { ExtensionMessageType, WebviewMessageType } from './types';
   },
   "dependencies": {
     "vscode-jsonrpc": "^8.2.0",
-    "zod": "^3.23.0"
+    "zod": "^3.23.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zustand": "^5.0.0",
+    "monaco-editor": "^0.52.0",
+    "@monaco-editor/react": "^4.6.0",
+    "@vscode-elements/elements": "^1.6.0",
+    "@vscode/codicons": "^0.0.36"
   },
   "devDependencies": {
     "@types/vscode": "^1.85.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "typescript": "^5.3.0"
-  },
-  "webviewDependencies": {
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "zustand": "^5.0.0",
-    "@monaco-editor/react": "^4.6.0",
-    "@vscode-elements/elements": "^1.6.0",
-    "@vscode/codicons": "^0.0.36"
+    "typescript": "^5.3.0",
+    "esbuild": "^0.27.0"
   }
 }
 ```
@@ -1246,8 +1246,8 @@ konsol/                           # VSCode extension root
 │       └── konsol.css            # Styles using VSCode CSS variables
 │
 ├── shared/                       # Shared between extension and webview
-│   ├── types.ts                  # Enums, interfaces (no runtime validation)
-│   └── schemas.ts                # Zod schemas, inferred types, validators
+│   ├── types.ts                  # Enums, interfaces (no runtime code)
+│   └── schemas.ts                # Zod schemas + z.infer<> types + validators
 │
 ├── dist/                         # Build output (gitignored)
 │   ├── extension.js              # Bundled extension
@@ -1266,21 +1266,34 @@ konsol/                           # VSCode extension root
 
 ## Implementation Phases
 
-### Phase 1: Core Functionality (MVP)
-1. Project scaffolding with npm, React 19, TypeScript
-2. Extension host with WebviewViewProvider
-3. React webview with basic UI (Output + simple textarea input)
-4. Zustand store for state management
-5. Konsol client with JSON-RPC over stdio
-6. Basic eval flow: input → konsol → output display
-7. Session lifecycle (start/stop/reconnect)
+### Phase 1a: Extension Skeleton
+1. Project scaffolding with npm, TypeScript, esbuild
+2. Extension host with WebviewViewProvider (static HTML)
+3. Konsol process spawn with JSON-RPC connection
+4. `initialize` handshake validation
+5. Basic error handling for missing konsol gem
+
+### Phase 1b: Basic Eval Flow
+1. Simple webview UI with vanilla HTML/JS (no React yet)
+2. `<textarea>` input + Run button
+3. Single eval roundtrip: input → konsol → output display
+4. Session create/destroy lifecycle
+5. stdout/stderr streaming display
+
+### Phase 1c: React Migration
+1. Add React 19 + Zustand dependencies
+2. Port webview to React components
+3. Zustand store for state management
+4. Zod validation for extension ↔ webview messages
+5. vscode-elements integration
 
 ### Phase 2: Monaco Integration
 1. Replace textarea with `@monaco-editor/react`
-2. Ruby syntax highlighting
-3. Multi-line input support
-4. Command history (up/down arrows)
-5. Keyboard shortcuts (Ctrl+Enter to run)
+2. Bundle Monaco locally (not CDN) for CSP compliance
+3. Ruby syntax highlighting
+4. Multi-line input support
+5. Command history (up/down arrows)
+6. Keyboard shortcuts (Ctrl+Enter to run)
 
 ### Phase 3: Polish
 1. Native theming with VSCode CSS variables
@@ -1499,55 +1512,83 @@ test-fixtures/
 
 ### Build Script (`esbuild.js`)
 
-Uses esbuild with a problem matcher plugin for VSCode integration:
+Uses esbuild with dual configurations for extension host (Node.js) and webview (browser):
 
 ```javascript
 const esbuild = require("esbuild");
 
-const production = process.argv.includes('--production');
-const watch = process.argv.includes('--watch');
+const production = process.argv.includes("--production");
+const watch = process.argv.includes("--watch");
 
 // Plugin for VSCode problem matcher integration
 const esbuildProblemMatcherPlugin = {
-  name: 'esbuild-problem-matcher',
+  name: "esbuild-problem-matcher",
   setup(build) {
     build.onStart(() => {
-      console.log('[watch] build started');
+      console.log("[watch] build started");
     });
     build.onEnd((result) => {
       result.errors.forEach(({ text, location }) => {
         console.error(`✘ [ERROR] ${text}`);
-        console.error(`    ${location.file}:${location.line}:${location.column}:`);
+        if (location) {
+          console.error(`    ${location.file}:${location.line}:${location.column}:`);
+        }
       });
-      console.log('[watch] build finished');
+      console.log("[watch] build finished");
     });
   },
 };
 
+// Extension host build (Node.js)
+const extensionConfig = {
+  entryPoints: ["src/extension.ts"],
+  bundle: true,
+  format: "cjs",
+  minify: production,
+  sourcemap: !production,
+  sourcesContent: false,
+  platform: "node",
+  outfile: "dist/extension.js",
+  external: ["vscode"],
+  logLevel: "silent",
+  plugins: [esbuildProblemMatcherPlugin],
+};
+
+// Webview build (Browser) - Phase 1c+
+const webviewConfig = {
+  entryPoints: ["webview/main.tsx"],
+  bundle: true,
+  format: "esm",
+  minify: production,
+  sourcemap: !production,
+  sourcesContent: false,
+  platform: "browser",
+  outfile: "dist/webview/main.js",
+  external: [],
+  logLevel: "silent",
+  plugins: [esbuildProblemMatcherPlugin],
+  loader: {
+    ".ttf": "file", // For Monaco editor fonts
+    ".css": "css",
+  },
+  define: {
+    "process.env.NODE_ENV": production ? '"production"' : '"development"',
+  },
+};
+
 async function main() {
-  const ctx = await esbuild.context({
-    entryPoints: ['src/extension.ts'],
-    bundle: true,
-    format: 'cjs',
-    minify: production,
-    sourcemap: !production,
-    sourcesContent: false,
-    platform: 'node',
-    outfile: 'dist/extension.js',
-    external: ['vscode'],
-    logLevel: 'silent',
-    plugins: [esbuildProblemMatcherPlugin],
-  });
+  const extensionCtx = await esbuild.context(extensionConfig);
+  const webviewCtx = await esbuild.context(webviewConfig);
 
   if (watch) {
-    await ctx.watch();
+    await Promise.all([extensionCtx.watch(), webviewCtx.watch()]);
   } else {
-    await ctx.rebuild();
-    await ctx.dispose();
+    await Promise.all([extensionCtx.rebuild(), webviewCtx.rebuild()]);
+    await Promise.all([extensionCtx.dispose(), webviewCtx.dispose()]);
   }
 }
 
-main().catch(e => {
+main().catch((e) => {
   console.error(e);
   process.exit(1);
 });
@@ -1574,10 +1615,7 @@ main().catch(e => {
 }
 ```
 
-**Note:** The current bootstrap uses `pnpm`. To switch to `npm`:
-1. Delete `pnpm-lock.yaml`
-2. Run `npm install` to generate `package-lock.json`
-3. Replace `pnpm run` with `npm run` in package.json scripts
+**Note:** Use `npm` as the package manager for best vsce compatibility. The scripts already use `npm run` commands.
 
 ### TypeScript Configs
 
@@ -1585,21 +1623,28 @@ main().catch(e => {
 ```json
 {
   "compilerOptions": {
+    "module": "Node16",
     "target": "ES2022",
-    "module": "CommonJS",
     "lib": ["ES2022"],
-    "outDir": "./out",
-    "strict": true,
-    "esModuleInterop": true,
+    "sourceMap": true,
+    "rootDir": "src",
+    "outDir": "out",
+
     "skipLibCheck": true,
-    "resolveJsonModule": true
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true
   },
-  "include": ["src/**/*", "shared/**/*"],
-  "exclude": ["node_modules", "webview"]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "out"]
 }
 ```
 
-**tsconfig.webview.json** (React Webview):
+> **Note:** Do NOT add `noEmit: true` to this config. The `check-types` script already passes `--noEmit` explicitly, and `compile-tests` needs tsc to emit JS files for the VSCode test runner.
+
+**tsconfig.webview.json** (React Webview - Phase 1c+):
 ```json
 {
   "compilerOptions": {
@@ -1758,10 +1803,10 @@ const writer = new StreamMessageWriter(process.stdin);
 
 ## Open Questions
 
-1. **Monaco bundle size**
+1. **Monaco bundle size** *(Resolved)*
    - `@monaco-editor/react` lazy-loads Monaco from CDN by default
-   - Alternative: Bundle locally for offline support (adds ~2MB)
-   - Decision: Use CDN for now, reconsider if offline needed
+   - **Problem:** Webview CSP blocks external scripts by default
+   - **Decision:** Bundle Monaco locally (~2MB). Use `monaco-editor` directly with esbuild loader for `.ttf` fonts. This ensures CSP compliance and offline support.
 
 2. **LSP Delegation complexity?**
    - Virtual document approach requires Ruby LSP to be active
