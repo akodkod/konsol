@@ -40,22 +40,22 @@ bundle exec rubocop -A  # Auto-correct
 cd vscode-extension
 
 # Install dependencies
-pnpm install
+npm install
 
 # Build (type check + lint + esbuild)
-pnpm run compile
+npm run compile
 
 # Watch mode
-pnpm run watch
+npm run watch
 
 # Type check only
-pnpm run check-types
+npm run check-types
 
 # Lint
-pnpm run lint
+npm run lint
 
 # Run tests
-pnpm run test
+npm run test
 ```
 
 ## Architecture
