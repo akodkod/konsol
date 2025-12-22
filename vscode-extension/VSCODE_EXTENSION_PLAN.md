@@ -18,7 +18,7 @@ The extension provides a **custom terminal-like bottom panel** in VSCode for Rai
 
 | Layer | Technology | Purpose |
 |-------|------------|---------|
-| **Package Manager** | Bun | Fast installs, builds, and scripts |
+| **Package Manager** | npm | Industry standard, best vsce compatibility |
 | **Extension Host** | TypeScript | VSCode extension runtime (Node.js) |
 | **Webview UI** | React 19 | Component-based UI with native web component support |
 | **State Management** | Zustand | Lightweight global store for webview state |
@@ -26,14 +26,14 @@ The extension provides a **custom terminal-like bottom panel** in VSCode for Rai
 | **Code Editor** | Monaco + @monaco-editor/react | Rich code input with syntax highlighting |
 | **UI Components** | vscode-elements | Native VSCode look via web components |
 | **Communication** | vscode-jsonrpc | JSON-RPC 2.0 with LSP framing |
-| **Build Tool** | esbuild (via Bun) | Fast bundling for extension and webview |
+| **Build Tool** | esbuild | Fast bundling for extension and webview |
 
 ### Why These Choices
 
 - **React 19**: Native web component support — use `<vscode-button>` directly without wrappers
 - **Zustand**: Minimal boilerplate, works great with React, easy persistence via `getState()`/`setState()`
 - **Zod**: Runtime validation of JSON-RPC messages with automatic TypeScript type inference via `z.infer<>`
-- **Bun**: Faster than npm/yarn, built-in TypeScript support, simpler scripts
+- **npm**: Best compatibility with vsce (VSCode Extension CLI) for packaging and publishing
 
 ---
 
@@ -1086,98 +1086,6 @@ export { ExtensionMessageType, WebviewMessageType } from './types';
 
 ---
 
-## Autocomplete / Intellisense Strategy
-
-### Challenge
-
-Monaco editor inside a webview is **isolated** from VSCode's language services. Ruby LSP completions don't automatically work.
-
-### Solutions (in order of recommendation)
-
-#### Solution 1: Extension-Side LSP Delegation (Recommended)
-
-The extension host acts as a bridge between Monaco and Ruby LSP:
-
-```
-Monaco (webview) → postMessage → Extension Host → Ruby LSP → back to Monaco
-```
-
-**Implementation:**
-
-```typescript
-// In extension host
-async getCompletions(code: string, position: Position): Promise<CompletionItem[]> {
-  // Create a virtual document with the code
-  const virtualUri = vscode.Uri.parse(`konsol-virtual://session/${Date.now()}.rb`);
-
-  // Use VSCode's completion API which delegates to Ruby LSP
-  const completions = await vscode.commands.executeCommand<vscode.CompletionList>(
-    'vscode.executeCompletionItemProvider',
-    virtualUri,
-    position
-  );
-
-  return completions.items.map(item => ({
-    label: item.label,
-    kind: item.kind,
-    detail: item.detail,
-    insertText: item.insertText
-  }));
-}
-```
-
-**Requirements:**
-- Register a `TextDocumentContentProvider` for `konsol-virtual://` scheme
-- Keep virtual document content in sync with Monaco editor content
-- Map Monaco positions to VSCode positions
-
-#### Solution 2: Custom Completion Provider
-
-Build a custom Ruby completion provider using:
-
-1. **Static completions**: Rails/Ruby keywords, common methods
-2. **Dynamic completions**: Query konsol for available methods/variables
-
-```typescript
-// Query session for available completions
-async getSessionCompletions(prefix: string): Promise<string[]> {
-  // Eval a completion helper in the session
-  const result = await this.client.eval(`
-    methods.grep(/^${prefix}/).take(50)
-  `);
-  return JSON.parse(result.value);
-}
-```
-
-**Pros:**
-- Works without Ruby LSP
-- Can include session-specific variables
-
-**Cons:**
-- Less comprehensive than Ruby LSP
-- Requires careful implementation
-
-#### Solution 3: Monaco-VSCode-API (Advanced)
-
-Use [@codingame/monaco-vscode-api](https://github.com/CodinGame/monaco-vscode-api) to bridge Monaco with VSCode services.
-
-**Pros:**
-- Full VSCode API compatibility in webview
-- Themes, settings, keybindings all work
-
-**Cons:**
-- Complex setup
-- Large bundle size
-- May have compatibility issues
-
-### Recommended Hybrid Approach
-
-1. **Primary**: LSP Delegation for full Ruby intellisense
-2. **Fallback**: Static completions when LSP unavailable
-3. **Enhancement**: Session-aware completions (local variables, etc.)
-
----
-
 ## Package.json Configuration
 
 ```json
@@ -1293,22 +1201,31 @@ Use [@codingame/monaco-vscode-api](https://github.com/CodinGame/monaco-vscode-ap
 ## Project Structure
 
 ```
-vscode-konsol/
+konsol/                           # VSCode extension root
 ├── package.json
-├── tsconfig.json
-├── tsconfig.webview.json         # Separate config for React webview
-├── bun.lock
-├── build.ts                      # Bun build script
+├── package-lock.json             # npm lockfile (use npm, not pnpm/bun)
+├── tsconfig.json                 # Extension TypeScript config
+├── tsconfig.webview.json         # Separate config for React webview (Phase 2+)
+├── esbuild.js                    # esbuild build script
+├── eslint.config.mjs             # ESLint flat config
+├── .vscode-test.mjs              # VSCode test CLI configuration
+│
+├── .vscode/
+│   ├── extensions.json           # Recommended extensions
+│   ├── launch.json               # Debug configurations
+│   ├── settings.json             # Workspace settings
+│   └── tasks.json                # Build tasks
 │
 ├── src/                          # Extension Host (Node.js)
 │   ├── extension.ts              # Entry point, activation
-│   ├── konsol-client.ts          # JSON-RPC client for konsol
+│   ├── konsol-client.ts          # JSON-RPC client for konsol gem
 │   ├── konsol-view-provider.ts   # WebviewViewProvider
 │   ├── completion-provider.ts    # LSP delegation / custom completions
 │   ├── virtual-document.ts       # Virtual document for LSP bridging
-│   └── types.ts                  # Shared type definitions
+│   └── test/                     # Extension integration tests
+│       └── extension.test.ts     # Mocha test suite
 │
-├── webview/                      # React 19 Webview (Browser)
+├── webview/                      # React 19 Webview (Browser) - Phase 2+
 │   ├── index.html                # HTML template with React root
 │   ├── main.tsx                  # React entry point
 │   ├── App.tsx                   # Root component
@@ -1319,8 +1236,7 @@ vscode-konsol/
 │   │   ├── StatusBar.tsx         # Connection status, session info
 │   │   └── Toolbar.tsx           # Run button, clear, etc.
 │   ├── stores/
-│   │   ├── konsol-store.ts       # Zustand store for session state
-│   │   └── types.ts              # Store types
+│   │   └── konsol-store.ts       # Zustand store for session state
 │   ├── hooks/
 │   │   ├── use-vscode-api.ts     # VSCode API hook
 │   │   └── use-konsol.ts         # Konsol actions hook
@@ -1331,14 +1247,19 @@ vscode-konsol/
 │
 ├── shared/                       # Shared between extension and webview
 │   ├── types.ts                  # Enums, interfaces (no runtime validation)
-│   └── events.ts                 # Zod schemas, inferred types, validators
+│   └── schemas.ts                # Zod schemas, inferred types, validators
 │
-├── resources/
-│   └── icons/
+├── dist/                         # Build output (gitignored)
+│   ├── extension.js              # Bundled extension
+│   └── webview/                  # Bundled webview assets
+│       └── main.js
 │
-└── test/
-    ├── extension.test.ts
-    └── webview.test.tsx
+├── out/                          # TypeScript compiled tests (gitignored)
+│   └── test/
+│       └── extension.test.js
+│
+└── resources/
+    └── icons/
 ```
 
 ---
@@ -1346,7 +1267,7 @@ vscode-konsol/
 ## Implementation Phases
 
 ### Phase 1: Core Functionality (MVP)
-1. Project scaffolding with Bun, React 19, TypeScript
+1. Project scaffolding with npm, React 19, TypeScript
 2. Extension host with WebviewViewProvider
 3. React webview with basic UI (Output + simple textarea input)
 4. Zustand store for state management
@@ -1361,87 +1282,275 @@ vscode-konsol/
 4. Command history (up/down arrows)
 5. Keyboard shortcuts (Ctrl+Enter to run)
 
-### Phase 3: Autocomplete
-1. Static Ruby/Rails completions
-2. Session-aware completions (variables, methods)
-3. LSP delegation for full intellisense (if Ruby LSP installed)
-
-### Phase 4: Polish
+### Phase 3: Polish
 1. Native theming with VSCode CSS variables
 2. Rich output formatting (syntax-highlighted results)
 3. Error stack trace links (click to open file)
 4. Inline object inspection
 5. Loading states and error handling
 
-### Phase 5: Advanced Features
+### Phase 4: Advanced Features
 1. Multiple sessions (tabs)
 2. Code snippets
 3. History persistence (via `vscode.setState`)
 4. "Eval selection" from editor (context menu)
 5. Integration with Ruby debugger
 
+### Future: Autocomplete / Intellisense
+See [AUTOCOMPLETE_PLAN.md](./AUTOCOMPLETE_PLAN.md) for detailed implementation strategy.
+
+---
+
+## Testing
+
+### Testing Stack
+
+| Tool | Purpose |
+|------|---------|
+| `@vscode/test-cli` | CLI runner for VSCode extension tests |
+| `@vscode/test-electron` | Downloads and launches VSCode for testing |
+| `Mocha` | Test framework (suite/test pattern) |
+| `assert` | Node.js built-in assertions |
+
+### Test Categories
+
+#### 1. Extension Integration Tests (`src/test/`)
+
+Tests that run inside a VSCode instance with full API access.
+
+**Location:** `src/test/extension.test.ts`
+
+**What to test:**
+- Extension activation
+- Command registration and execution
+- WebviewViewProvider creation
+- Session lifecycle (start → eval → stop)
+- Error handling for missing konsol gem
+
+```typescript
+import * as assert from 'assert';
+import * as vscode from 'vscode';
+
+suite('Extension Test Suite', () => {
+  vscode.window.showInformationMessage('Start all tests.');
+
+  test('Extension should be present', () => {
+    assert.ok(vscode.extensions.getExtension('konsol.konsol'));
+  });
+
+  test('Extension should activate', async () => {
+    const ext = vscode.extensions.getExtension('konsol.konsol');
+    await ext?.activate();
+    assert.strictEqual(ext?.isActive, true);
+  });
+
+  test('Commands should be registered', async () => {
+    const commands = await vscode.commands.getCommands(true);
+    assert.ok(commands.includes('konsol.start'));
+    assert.ok(commands.includes('konsol.stop'));
+    assert.ok(commands.includes('konsol.clear'));
+  });
+});
+```
+
+#### 2. Unit Tests (Future - when adding business logic)
+
+For testing pure functions without VSCode API dependency.
+
+**Location:** `src/test/unit/` (to be created)
+
+**What to test:**
+- Protocol message parsing/serialization
+- Zod schema validation
+- Case transformation (camelCase ↔ snake_case)
+- Output formatting logic
+
+```typescript
+import { describe, it } from 'mocha';
+import * as assert from 'assert';
+import { parseExtensionMessage } from '../../shared/schemas';
+
+describe('Message Parsing', () => {
+  it('should parse valid connected message', () => {
+    const result = parseExtensionMessage({
+      type: 'connected',
+      sessionId: 'abc-123'
+    });
+    assert.ok(result.success);
+  });
+
+  it('should reject invalid message', () => {
+    const result = parseExtensionMessage({
+      type: 'invalid'
+    });
+    assert.ok(!result.success);
+  });
+});
+```
+
+#### 3. Webview Tests (Phase 2+)
+
+For testing React components and Zustand store.
+
+**Location:** `webview/test/` (to be created)
+
+**Tools:** Vitest + React Testing Library (runs in Node, not VSCode)
+
+**What to test:**
+- Zustand store state transitions
+- Component rendering
+- Message handling from extension
+- User interactions (click, keyboard)
+
+### Test Configuration
+
+#### `.vscode-test.mjs`
+
+```javascript
+import { defineConfig } from '@vscode/test-cli';
+
+export default defineConfig({
+  files: 'out/test/**/*.test.js',
+  // Optionally specify VSCode version
+  // version: 'stable',
+  // workspaceFolder: './test-fixtures/workspace',
+  // extensionDevelopmentPath: '.',
+});
+```
+
+#### Running Tests
+
+```bash
+# Run all tests (compiles first)
+npm test
+
+# Watch mode for test development
+npm run watch-tests
+
+# Run tests without compilation (if already compiled)
+npx vscode-test
+```
+
+### Test Workflow
+
+1. **Compile tests:** `npm run compile-tests`
+   - TypeScript compiles `src/test/*.ts` → `out/test/*.js`
+
+2. **Run tests:** `npm test`
+   - Runs `pretest` (compile-tests + compile + lint)
+   - Downloads VSCode if needed
+   - Launches VSCode with extension loaded
+   - Executes Mocha test suites
+   - Reports results
+
+### CI/CD Integration
+
+GitHub Actions workflow for automated testing:
+
+```yaml
+# .github/workflows/test.yml
+name: Test
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - run: xvfb-run -a npm test
+        # xvfb required for headless VSCode on Linux
+```
+
+### Test Best Practices
+
+1. **Isolate tests:** Each test should be independent
+2. **Clean up:** Dispose of subscriptions and close panels after tests
+3. **Async handling:** Use `async/await` for VSCode API calls
+4. **Timeouts:** Set appropriate timeouts for slow operations (extension activation, process spawn)
+5. **Fixtures:** Use `test-fixtures/` directory for sample Rails apps (for integration with konsol gem)
+
+### Future: End-to-End Tests
+
+For full integration testing with the konsol gem:
+
+```
+test-fixtures/
+└── rails-app/           # Minimal Rails app with konsol gem
+    ├── Gemfile
+    ├── config/
+    └── ...
+```
+
+**E2E test flow:**
+1. Spawn konsol server from fixture app
+2. Connect extension to server
+3. Execute eval commands
+4. Verify results match expected output
+5. Clean up
+
 ---
 
 ## Build Configuration
 
-### Build Script (`build.ts`)
+### Build Script (`esbuild.js`)
 
-Uses Bun's built-in bundler (powered by esbuild) for fast builds:
+Uses esbuild with a problem matcher plugin for VSCode integration:
 
-```typescript
-import type { BuildConfig } from 'bun';
+```javascript
+const esbuild = require("esbuild");
 
-const isDev = process.argv.includes('--watch');
-const isWatch = process.argv.includes('--watch');
+const production = process.argv.includes('--production');
+const watch = process.argv.includes('--watch');
 
-// Extension Host (Node.js / CommonJS)
-const extensionConfig: BuildConfig = {
-  entrypoints: ['./src/extension.ts'],
-  outdir: './out',
-  target: 'node',
-  format: 'cjs',
-  external: ['vscode'],
-  sourcemap: isDev ? 'inline' : 'none',
-  minify: !isDev,
-  naming: '[name].js',
+// Plugin for VSCode problem matcher integration
+const esbuildProblemMatcherPlugin = {
+  name: 'esbuild-problem-matcher',
+  setup(build) {
+    build.onStart(() => {
+      console.log('[watch] build started');
+    });
+    build.onEnd((result) => {
+      result.errors.forEach(({ text, location }) => {
+        console.error(`✘ [ERROR] ${text}`);
+        console.error(`    ${location.file}:${location.line}:${location.column}:`);
+      });
+      console.log('[watch] build finished');
+    });
+  },
 };
 
-// Webview (Browser / ESM)
-const webviewConfig: BuildConfig = {
-  entrypoints: ['./webview/main.tsx'],
-  outdir: './out/webview',
-  target: 'browser',
-  format: 'esm',
-  sourcemap: isDev ? 'inline' : 'none',
-  minify: !isDev,
-  naming: '[name].js',
-};
+async function main() {
+  const ctx = await esbuild.context({
+    entryPoints: ['src/extension.ts'],
+    bundle: true,
+    format: 'cjs',
+    minify: production,
+    sourcemap: !production,
+    sourcesContent: false,
+    platform: 'node',
+    outfile: 'dist/extension.js',
+    external: ['vscode'],
+    logLevel: 'silent',
+    plugins: [esbuildProblemMatcherPlugin],
+  });
 
-async function build() {
-  console.log(`🔨 Building${isWatch ? ' (watch mode)' : ''}...`);
-
-  const results = await Promise.all([
-    Bun.build(extensionConfig),
-    Bun.build(webviewConfig),
-  ]);
-
-  const [ext, web] = results;
-
-  if (!ext.success || !web.success) {
-    console.error('❌ Build failed');
-    for (const result of results) {
-      for (const log of result.logs) {
-        console.error(log);
-      }
-    }
-    process.exit(1);
+  if (watch) {
+    await ctx.watch();
+  } else {
+    await ctx.rebuild();
+    await ctx.dispose();
   }
-
-  console.log(`✅ Extension: ${ext.outputs.length} file(s)`);
-  console.log(`✅ Webview: ${web.outputs.length} file(s)`);
 }
 
-build();
+main().catch(e => {
+  console.error(e);
+  process.exit(1);
+});
 ```
 
 ### Package.json Scripts
@@ -1449,16 +1558,26 @@ build();
 ```json
 {
   "scripts": {
-    "build": "bun run build.ts",
-    "watch": "bun run build.ts --watch",
-    "dev": "bun run watch",
-    "typecheck": "tsc --noEmit",
-    "lint": "eslint src webview --ext .ts,.tsx",
-    "package": "bun run build && vsce package --no-dependencies",
-    "publish": "bun run build && vsce publish --no-dependencies"
+    "vscode:prepublish": "npm run package",
+    "compile": "npm run check-types && npm run lint && node esbuild.js",
+    "watch": "npm-run-all -p watch:*",
+    "watch:esbuild": "node esbuild.js --watch",
+    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+    "package": "npm run check-types && npm run lint && node esbuild.js --production",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "check-types": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vscode-test"
   }
 }
 ```
+
+**Note:** The current bootstrap uses `pnpm`. To switch to `npm`:
+1. Delete `pnpm-lock.yaml`
+2. Run `npm install` to generate `package-lock.json`
+3. Replace `pnpm run` with `npm run` in package.json scripts
 
 ### TypeScript Configs
 
@@ -1592,9 +1711,9 @@ const writer = new StreamMessageWriter(process.stdin);
 - `@vscode/codicons`: VSCode icon font
 
 ### Build Tools
-- `bun`: Package manager and build runner
+- `npm`: Package manager (best vsce compatibility)
 - `typescript`: Type checking
-- `esbuild`: Fast bundling (via Bun)
+- `esbuild`: Fast bundling for extension and webview
 
 > **Note:** The `@vscode/webview-ui-toolkit` was deprecated Jan 2025. Use `@vscode-elements/elements` instead.
 >
@@ -1606,6 +1725,7 @@ const writer = new StreamMessageWriter(process.stdin);
 
 ### Project Documentation
 - [VSCODE_EXTENSION_BEST_PRACTICES.md](./VSCODE_EXTENSION_BEST_PRACTICES.md) — CSS variables, theming, security, performance
+- [AUTOCOMPLETE_PLAN.md](./AUTOCOMPLETE_PLAN.md) — Autocomplete/Intellisense implementation strategy (future phase)
 
 ### VSCode Extension
 - [VSCode Webview API](https://code.visualstudio.com/api/extension-guides/webview)
@@ -1631,7 +1751,8 @@ const writer = new StreamMessageWriter(process.stdin);
 - [Ruby LSP VSCode Extension](https://github.com/Shopify/vscode-ruby-lsp)
 
 ### Build Tools
-- [Bun](https://bun.sh/) — Package manager and runtime
+- [esbuild](https://esbuild.github.io/) — Fast JavaScript/TypeScript bundler
+- [npm](https://docs.npmjs.com/) — Node.js package manager
 
 ---
 
