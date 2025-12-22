@@ -13,7 +13,7 @@ module Konsol
         Exit = new("exit")
         CancelRequest = new("$/cancelRequest")
 
-        # Konsol console methods
+        # Konsol main methods
         SessionCreate = new("konsol/session.create")
         Eval = new("konsol/eval")
         Interrupt = new("konsol/interrupt")
