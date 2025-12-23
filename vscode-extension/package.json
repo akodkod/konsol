@@ -14,12 +14,57 @@
   ],
   "main": "./dist/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "panel": [
+        {
+          "id": "konsol-panel-container",
+          "title": "Konsol",
+          "icon": "$(terminal)"
+        }
+      ]
+    },
+    "views": {
+      "konsol-panel-container": [
+        {
+          "type": "webview",
+          "id": "konsol.panel",
+          "name": "Rails Console",
+          "contextualTitle": "Konsol"
+        }
+      ]
+    },
     "commands": [
       {
-        "command": "konsol.helloWorld",
-        "title": "Hello World"
+        "command": "konsol.start",
+        "title": "Start Konsol Session",
+        "category": "Konsol"
+      },
+      {
+        "command": "konsol.stop",
+        "title": "Stop Konsol Session",
+        "category": "Konsol"
+      },
+      {
+        "command": "konsol.clear",
+        "title": "Clear Console",
+        "category": "Konsol"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Konsol",
+      "properties": {
+        "konsol.railsEnv": {
+          "type": "string",
+          "default": "development",
+          "description": "Rails environment to use"
+        },
+        "konsol.autoStart": {
+          "type": "boolean",
+          "default": false,
+          "description": "Automatically start Konsol when opening a Rails project"
+        }
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
@@ -35,11 +80,23 @@
     "lint": "eslint src",
     "test": "vscode-test"
   },
+  "dependencies": {
+    "vscode-jsonrpc": "^8.2.0",
+    "zod": "^3.23.0",
+    "ts-pattern": "^5.6.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "zustand": "^5.0.0",
+    "@vscode-elements/elements": "^1.6.0",
+    "@vscode/codicons": "^0.0.36"
+  },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
     "@types/vscode": "^1.107.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
     "esbuild": "^0.27.1",
