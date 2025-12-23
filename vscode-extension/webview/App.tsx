@@ -2,7 +2,6 @@ import { useEffect } from "react"
 import { match } from "ts-pattern"
 import { Output } from "./components/Output"
 import { Input } from "./components/Input"
-import { StatusBar } from "./components/StatusBar"
 import {
   setConnected,
   addCommand,
@@ -10,6 +9,7 @@ import {
   addOutput,
   clearOutput,
   setEvaluating,
+  restorePersistedState,
 } from "./stores/konsol-store"
 import { vscode } from "./lib/vscode-api"
 import { parseExtensionToWebview } from "../shared/schemas"
@@ -17,6 +17,9 @@ import type { ExtensionToWebview, StdoutParams, StderrParams, StatusParams } fro
 
 export function App() {
   useEffect(() => {
+    // Restore persisted preferences from VSCode state
+    restorePersistedState()
+
     const handleMessage = (event: MessageEvent<ExtensionToWebview>) => {
       const parsed = parseExtensionToWebview(event.data)
       if (!parsed.success) {
@@ -76,7 +79,6 @@ export function App() {
   return (
     <div className="konsol-container">
       <Output />
-      <StatusBar />
       <Input onEval={handleEval} />
     </div>
   )

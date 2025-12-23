@@ -81,6 +81,7 @@ export const WebviewToExtensionSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("eval"), code: z.string() }),
   z.object({ type: z.literal("interrupt") }),
   z.object({ type: z.literal("clear") }),
+  z.object({ type: z.literal("connect") }),
 ])
 
 // ─────────────────────────────────────────────────────────────────────────────

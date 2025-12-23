@@ -71,57 +71,105 @@ body {
   border-radius: 3px;
 }
 
-/* Status bar */
-.konsol-status-bar {
-  padding: 4px 12px;
-  background: var(--vscode-statusBar-background);
-  color: var(--vscode-statusBar-foreground);
-  font-size: 12px;
+/* Input area */
+.konsol-input-container {
+  border-top: 1px solid var(--vscode-panel-border);
+}
+
+.konsol-input-wrapper {
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+}
+
+/* Input footer (status + checkbox) */
+.konsol-input-footer {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  padding: 0 8px 8px;
+  font-size: 11px;
+  color: var(--vscode-descriptionForeground);
+}
+
+.konsol-status {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 5px;
+  padding-left: 1px;
 }
 
 .konsol-status-indicator {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: var(--vscode-terminal-ansiRed);
+  transform: translateY(1px);
 }
 
 .konsol-status-indicator.connected {
   background: var(--vscode-terminal-ansiGreen);
 }
 
-.konsol-status-text {
-  flex: 1;
-}
-
-/* Input area */
-.konsol-input-wrapper {
-  display: flex;
-  gap: 8px;
-  padding: 8px;
-  border-top: 1px solid var(--vscode-panel-border);
-  background: var(--vscode-input-background);
+.konsol-input-footer vscode-checkbox {
+  --vscode-font-size: 14px;
+  transform: scale(0.7);
+  transform-origin: right center;
 }
 
 .konsol-textarea {
   flex: 1;
   resize: none;
-  border: 1px solid var(--vscode-input-border);
-  background: var(--vscode-input-background);
+  border: none;
+  background: var(--vscode-panel-background);
   color: var(--vscode-input-foreground);
   font-family: var(--vscode-editor-font-family), monospace;
   font-size: var(--vscode-editor-font-size);
-  padding: 8px;
+  padding: 0;
   min-height: 60px;
 }
 
 .konsol-textarea:focus {
-  outline: 1px solid var(--vscode-focusBorder);
+  outline: none;
 }
 
 .konsol-textarea::placeholder {
   color: var(--vscode-input-placeholderForeground);
+  font-weight: 400;
 }
+
+/* ANSI color support */
+.ansi-black { color: var(--vscode-terminal-ansiBlack); }
+.ansi-red { color: var(--vscode-terminal-ansiRed); }
+.ansi-green { color: var(--vscode-terminal-ansiGreen); }
+.ansi-yellow { color: var(--vscode-terminal-ansiYellow); }
+.ansi-blue { color: var(--vscode-terminal-ansiBlue); }
+.ansi-magenta { color: var(--vscode-terminal-ansiMagenta); }
+.ansi-cyan { color: var(--vscode-terminal-ansiCyan); }
+.ansi-white { color: var(--vscode-terminal-ansiWhite); }
+
+.ansi-bright-black { color: var(--vscode-terminal-ansiBrightBlack); }
+.ansi-bright-red { color: var(--vscode-terminal-ansiBrightRed); }
+.ansi-bright-green { color: var(--vscode-terminal-ansiBrightGreen); }
+.ansi-bright-yellow { color: var(--vscode-terminal-ansiBrightYellow); }
+.ansi-bright-blue { color: var(--vscode-terminal-ansiBrightBlue); }
+.ansi-bright-magenta { color: var(--vscode-terminal-ansiBrightMagenta); }
+.ansi-bright-cyan { color: var(--vscode-terminal-ansiBrightCyan); }
+.ansi-bright-white { color: var(--vscode-terminal-ansiBrightWhite); }
+
+/* ANSI background colors */
+.ansi-bg-black { background-color: var(--vscode-terminal-ansiBlack); }
+.ansi-bg-red { background-color: var(--vscode-terminal-ansiRed); }
+.ansi-bg-green { background-color: var(--vscode-terminal-ansiGreen); }
+.ansi-bg-yellow { background-color: var(--vscode-terminal-ansiYellow); }
+.ansi-bg-blue { background-color: var(--vscode-terminal-ansiBlue); }
+.ansi-bg-magenta { background-color: var(--vscode-terminal-ansiMagenta); }
+.ansi-bg-cyan { background-color: var(--vscode-terminal-ansiCyan); }
+.ansi-bg-white { background-color: var(--vscode-terminal-ansiWhite); }
+
+/* ANSI decorations */
+.ansi-bold { font-weight: 700; }
+.ansi-dim { opacity: 0.7; }
+.ansi-italic { font-style: italic; }
+.ansi-underline { text-decoration: underline; }
+.ansi-strikethrough { text-decoration: line-through; }

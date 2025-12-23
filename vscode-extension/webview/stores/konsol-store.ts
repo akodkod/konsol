@@ -1,5 +1,6 @@
 import { create } from "zustand"
 import type { EvalResult, OutputEntry, OutputEntryType } from "../../shared/types"
+import { vscode } from "../lib/vscode-api"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
@@ -12,6 +13,7 @@ type KonsolState = {
   commandHistory: string[]
   commandHistoryIndex: number
   isEvaluating: boolean
+  submitOnEnter: boolean
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -25,6 +27,7 @@ const store = create<KonsolState>()(() => ({
   commandHistory: [],
   commandHistoryIndex: -1,
   isEvaluating: false,
+  submitOnEnter: true,
 }))
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -37,6 +40,7 @@ export const useOutput = () => store((state) => state.output)
 export const useCommandHistory = () => store((state) => state.commandHistory)
 export const useCommandHistoryIndex = () => store((state) => state.commandHistoryIndex)
 export const useIsEvaluating = () => store((state) => state.isEvaluating)
+export const useSubmitOnEnter = () => store((state) => state.submitOnEnter)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Mutators (exported actions)
@@ -90,6 +94,20 @@ export const clearOutput = () => {
 
 export const setEvaluating = (isEvaluating: boolean) => {
   store.setState({ isEvaluating })
+}
+
+export const setSubmitOnEnter = (submitOnEnter: boolean) => {
+  store.setState({ submitOnEnter })
+  // Persist to VSCode state
+  const currentState = vscode.getState() as Record<string, unknown> | undefined
+  vscode.setState({ ...currentState, submitOnEnter })
+}
+
+export const restorePersistedState = () => {
+  const state = vscode.getState() as { submitOnEnter?: boolean } | undefined
+  if (state?.submitOnEnter !== undefined) {
+    store.setState({ submitOnEnter: state.submitOnEnter })
+  }
 }
 
 export const navigateCommandHistory = (direction: "up" | "down"): string | null => {

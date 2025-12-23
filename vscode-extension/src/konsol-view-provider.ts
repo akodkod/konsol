@@ -10,6 +10,7 @@ type WebviewMessage =
   | { type: "eval", code: string }
   | { type: "interrupt" }
   | { type: "clear" }
+  | { type: "connect" }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Utilities
@@ -71,6 +72,9 @@ export class KonsolViewProvider implements vscode.WebviewViewProvider {
         break
       case "clear":
         // Clear is handled in webview
+        break
+      case "connect":
+        await this.start()
         break
       }
     })
@@ -182,9 +186,9 @@ export class KonsolViewProvider implements vscode.WebviewViewProvider {
     default-src 'none';
     style-src ${webview.cspSource} 'unsafe-inline';
     script-src 'nonce-${nonce}';
-    font-src ${webview.cspSource};
+    font-src ${webview.cspSource} data:;
   ">
-  <link rel="stylesheet" href="${styleUri}">
+  <link id="vscode-codicon-stylesheet" rel="stylesheet" href="${styleUri}">
   <title>Konsol</title>
 </head>
 <body>

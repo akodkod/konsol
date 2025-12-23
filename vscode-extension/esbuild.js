@@ -61,8 +61,10 @@ const webviewConfig = {
   plugins: [esbuildProblemMatcherPlugin],
   loader: {
     ".css": "css",
+    ".ttf": "dataurl",
   },
   jsx: "automatic",
+  jsxImportSource: "react",
   define: {
     "process.env.NODE_ENV": production ? "\"production\"" : "\"development\"",
   },

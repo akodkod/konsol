@@ -18,7 +18,7 @@ The extension provides a **custom terminal-like bottom panel** in VSCode for Rai
 
 | Layer                 | Technology                    | Purpose                                              |
 |-----------------------|-------------------------------|------------------------------------------------------|
-| **Package Manager**   | npm                           | Industry standard, best vsce compatibility           |
+| **Package Manager**   | pnpm                          | Fast, efficient disk usage, strict dependencies      |
 | **Extension Host**    | TypeScript                    | VSCode extension runtime (Node.js)                   |
 | **Webview UI**        | React 19                      | Component-based UI with native web component support |
 | **State Management**  | Zustand                       | Lightweight global store for webview state           |
@@ -35,7 +35,7 @@ The extension provides a **custom terminal-like bottom panel** in VSCode for Rai
 - **Zustand**: Minimal boilerplate, works great with React, easy persistence via `getState()`/`setState()`
 - **Zod**: Runtime validation of JSON-RPC messages with automatic TypeScript type inference via `z.infer<>`
 - **ts-pattern**: Exhaustive pattern matching for handling discriminated unions (Message types) with full type inference
-- **npm**: Best compatibility with vsce (VSCode Extension CLI) for packaging and publishing
+- **pnpm**: Fast package manager with efficient disk usage and strict dependency resolution
 
 ### TypeScript Conventions
 
@@ -1281,7 +1281,7 @@ export const parseWebviewToExtension = (data: unknown) =>
 ```
 konsol/                           # VSCode extension root
 ├── package.json
-├── package-lock.json             # npm lockfile (use npm, not pnpm/bun)
+├── pnpm-lock.yaml                # pnpm lockfile
 ├── tsconfig.json                 # Extension TypeScript config
 ├── tsconfig.webview.json         # Separate config for React webview (Phase 2+)
 ├── esbuild.js                    # esbuild build script
@@ -1346,7 +1346,7 @@ konsol/                           # VSCode extension root
 ## Implementation Phases
 
 ### Phase 1a: Extension Skeleton
-1. Project scaffolding with npm, TypeScript, esbuild
+1. Project scaffolding with pnpm, TypeScript, esbuild
 2. Extension host with WebviewViewProvider (static HTML)
 3. Konsol process spawn with JSON-RPC connection
 4. `initialize` handshake validation
@@ -1514,21 +1514,21 @@ export default defineConfig({
 
 ```bash
 # Run all tests (compiles first)
-npm test
+pnpm test
 
 # Watch mode for test development
-npm run watch-tests
+pnpm run watch-tests
 
 # Run tests without compilation (if already compiled)
-npx vscode-test
+pnpm exec vscode-test
 ```
 
 ### Test Workflow
 
-1. **Compile tests:** `npm run compile-tests`
+1. **Compile tests:** `pnpm run compile-tests`
    - TypeScript compiles `src/test/*.ts` → `out/test/*.js`
 
-2. **Run tests:** `npm test`
+2. **Run tests:** `pnpm test`
    - Runs `pretest` (compile-tests + compile + lint)
    - Downloads VSCode if needed
    - Launches VSCode with extension loaded
@@ -1553,8 +1553,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - run: npm ci
-      - run: xvfb-run -a npm test
+      - run: pnpm install --frozen-lockfile
+      - run: xvfb-run -a pnpm test
         # xvfb required for headless VSCode on Linux
 ```
 
@@ -1678,15 +1678,15 @@ main().catch((e) => {
 ```json
 {
   "scripts": {
-    "vscode:prepublish": "npm run package",
-    "compile": "npm run check-types && npm run lint && node esbuild.js",
+    "vscode:prepublish": "pnpm run package",
+    "compile": "pnpm run check-types && pnpm run lint && node esbuild.js",
     "watch": "npm-run-all -p watch:*",
     "watch:esbuild": "node esbuild.js --watch",
     "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
-    "package": "npm run check-types && npm run lint && node esbuild.js --production",
+    "package": "pnpm run check-types && pnpm run lint && node esbuild.js --production",
     "compile-tests": "tsc -p . --outDir out",
     "watch-tests": "tsc -p . -w --outDir out",
-    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "pretest": "pnpm run compile-tests && pnpm run compile && pnpm run lint",
     "check-types": "tsc --noEmit",
     "lint": "eslint src",
     "test": "vscode-test"
@@ -1834,7 +1834,7 @@ const writer = new StreamMessageWriter(process.stdin)
 - `@vscode/codicons`: VSCode icon font
 
 ### Build Tools
-- `npm`: Package manager (best vsce compatibility)
+- `pnpm`: Fast package manager with efficient disk usage
 - `typescript`: Type checking
 - `esbuild`: Fast bundling for extension and webview
 
@@ -1876,7 +1876,7 @@ const writer = new StreamMessageWriter(process.stdin)
 
 ### Build Tools
 - [esbuild](https://esbuild.github.io/) — Fast JavaScript/TypeScript bundler
-- [npm](https://docs.npmjs.com/) — Node.js package manager
+- [pnpm](https://pnpm.io/) — Fast, disk-efficient package manager
 
 ---
 
