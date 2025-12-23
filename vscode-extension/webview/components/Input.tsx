@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from "react"
 import {
   useIsEvaluating,
   useConnected,
+  useIsConnecting,
   useSubmitOnEnter,
   navigateCommandHistory,
   setSubmitOnEnter,
@@ -17,6 +18,7 @@ export function Input({ onEval }: InputProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const isEvaluating = useIsEvaluating()
   const connected = useConnected()
+  const isConnecting = useIsConnecting()
   const submitOnEnter = useSubmitOnEnter()
 
   const handleSubmit = useCallback(() => {
@@ -70,7 +72,9 @@ export function Input({ onEval }: InputProps) {
 
   const statusText = connected
     ? isEvaluating ? "Evaluating..." : "Connected"
-    : "Disconnected"
+    : isConnecting ? "Connecting..." : "Disconnected"
+
+  const indicatorClass = connected ? "connected" : isConnecting ? "connecting" : ""
 
   return (
     <div className="konsol-input-container">
@@ -87,7 +91,7 @@ export function Input({ onEval }: InputProps) {
       </div>
       <div className="konsol-input-footer">
         <div className="konsol-status">
-          <div className={`konsol-status-indicator ${connected ? "connected" : ""}`} />
+          <div className={`konsol-status-indicator ${indicatorClass}`} />
           <span className="konsol-status-text">{statusText}</span>
         </div>
         <vscode-checkbox

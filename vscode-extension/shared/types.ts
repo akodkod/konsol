@@ -162,6 +162,7 @@ export type WebviewToExtension =
   | { type: "eval", code: string }
   | { type: "interrupt" }
   | { type: "clear" }
+  | { type: "disconnect" }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Output Entry (for webview state)

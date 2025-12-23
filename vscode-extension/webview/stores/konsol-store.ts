@@ -6,13 +6,19 @@ import { vscode } from "../lib/vscode-api"
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
+export enum KonsolStatus {
+  Disconnected = "disconnected",
+  Connecting = "connecting",
+  Connected = "connected",
+  Evaluating = "evaluating",
+}
+
 type KonsolState = {
-  connected: boolean
+  status: KonsolStatus
   sessionId: string | null
   output: OutputEntry[]
   commandHistory: string[]
   commandHistoryIndex: number
-  isEvaluating: boolean
   submitOnEnter: boolean
 }
 
@@ -21,12 +27,11 @@ type KonsolState = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const store = create<KonsolState>()(() => ({
-  connected: false,
+  status: KonsolStatus.Disconnected,
   sessionId: null,
   output: [],
   commandHistory: [],
   commandHistoryIndex: -1,
-  isEvaluating: false,
   submitOnEnter: true,
 }))
 
@@ -34,20 +39,31 @@ const store = create<KonsolState>()(() => ({
 // Selectors (exported hooks)
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const useConnected = () => store((state) => state.connected)
+export const useStatus = () => store((state) => state.status)
+export const useConnected = () =>
+  store((state) => state.status === KonsolStatus.Connected || state.status === KonsolStatus.Evaluating)
+export const useIsConnecting = () => store((state) => state.status === KonsolStatus.Connecting)
+export const useIsEvaluating = () => store((state) => state.status === KonsolStatus.Evaluating)
 export const useSessionId = () => store((state) => state.sessionId)
 export const useOutput = () => store((state) => state.output)
 export const useCommandHistory = () => store((state) => state.commandHistory)
 export const useCommandHistoryIndex = () => store((state) => state.commandHistoryIndex)
-export const useIsEvaluating = () => store((state) => state.isEvaluating)
 export const useSubmitOnEnter = () => store((state) => state.submitOnEnter)
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Mutators (exported actions)
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const setConnected = (connected: boolean, sessionId?: string) => {
-  store.setState({ connected, sessionId: sessionId ?? null })
+export const startConnecting = () => {
+  store.setState({ status: KonsolStatus.Connecting })
+}
+
+export const connect = (sessionId: string) => {
+  store.setState({ status: KonsolStatus.Connected, sessionId })
+}
+
+export const disconnect = () => {
+  store.setState({ status: KonsolStatus.Disconnected, sessionId: null })
 }
 
 export const addOutput = (type: OutputEntryType, content: string) => {
@@ -92,8 +108,12 @@ export const clearOutput = () => {
   store.setState({ output: [], commandHistoryIndex: -1 })
 }
 
-export const setEvaluating = (isEvaluating: boolean) => {
-  store.setState({ isEvaluating })
+export const startEvaluating = () => {
+  store.setState({ status: KonsolStatus.Evaluating })
+}
+
+export const finishEvaluating = () => {
+  store.setState({ status: KonsolStatus.Connected })
 }
 
 export const setSubmitOnEnter = (submitOnEnter: boolean) => {

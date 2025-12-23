@@ -3,12 +3,14 @@ import { match } from "ts-pattern"
 import { Output } from "./components/Output"
 import { Input } from "./components/Input"
 import {
-  setConnected,
+  connect,
+  disconnect,
   addCommand,
   addEvalResult,
   addOutput,
   clearOutput,
-  setEvaluating,
+  startEvaluating,
+  finishEvaluating,
   restorePersistedState,
 } from "./stores/konsol-store"
 import { vscode } from "./lib/vscode-api"
@@ -29,17 +31,17 @@ export function App() {
 
       match(parsed.data)
         .with({ type: "connected" }, ({ sessionId }) => {
-          setConnected(true, sessionId)
+          connect(sessionId)
         })
         .with({ type: "disconnected" }, () => {
-          setConnected(false)
+          disconnect()
         })
         .with({ type: "result" }, ({ data }) => {
-          setEvaluating(false)
+          finishEvaluating()
           addEvalResult(data)
         })
         .with({ type: "error" }, ({ message }) => {
-          setEvaluating(false)
+          finishEvaluating()
           addOutput("error", `Error: ${message}`)
         })
         .with({ type: "notification" }, ({ method, params }) => {
@@ -55,7 +57,11 @@ export function App() {
             }
           } else if (method === "konsol/status") {
             const typedParams = params as StatusParams
-            setEvaluating(typedParams.busy)
+            if (typedParams.busy) {
+              startEvaluating()
+            } else {
+              finishEvaluating()
+            }
           }
         })
         .with({ type: "clear" }, () => {
@@ -71,8 +77,14 @@ export function App() {
   }, [])
 
   const handleEval = (code: string) => {
+    const trimmed = code.trim().toLowerCase()
+    if (trimmed === "exit" || trimmed === "quit") {
+      addCommand(code)
+      vscode.postMessage({ type: "disconnect" })
+      return
+    }
     addCommand(code)
-    setEvaluating(true)
+    startEvaluating()
     vscode.postMessage({ type: "eval", code })
   }
 

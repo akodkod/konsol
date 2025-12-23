@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback } from "react"
-import { useOutput, useConnected } from "../stores/konsol-store"
+import { useOutput, useConnected, useIsConnecting, startConnecting } from "../stores/konsol-store"
 import { parseAnsi } from "../lib/ansi"
 import { vscode } from "../lib/vscode-api"
 import "@vscode-elements/elements/dist/vscode-button"
@@ -7,6 +7,7 @@ import "@vscode-elements/elements/dist/vscode-button"
 export function Output() {
   const output = useOutput()
   const connected = useConnected()
+  const isConnecting = useIsConnecting()
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -14,6 +15,7 @@ export function Output() {
   }, [output])
 
   const handleConnect = useCallback(() => {
+    startConnecting()
     vscode.postMessage({ type: "connect" })
   }, [])
 
@@ -36,8 +38,13 @@ export function Output() {
           {connected ? (
             <p>Press <code>Enter</code> to run, <code>↑/↓</code> for history</p>
           ) : (
-            <vscode-button appearance="primary" icon="plug" onClick={handleConnect}>
-              Connect
+            <vscode-button
+              appearance="primary"
+              icon={isConnecting ? "loading~spin" : "plug"}
+              disabled={isConnecting}
+              onClick={handleConnect}
+            >
+              {isConnecting ? "Connecting..." : "Connect"}
             </vscode-button>
           )}
         </div>

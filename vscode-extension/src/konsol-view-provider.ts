@@ -11,6 +11,7 @@ type WebviewMessage =
   | { type: "interrupt" }
   | { type: "clear" }
   | { type: "connect" }
+  | { type: "disconnect" }
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Utilities
@@ -75,6 +76,9 @@ export class KonsolViewProvider implements vscode.WebviewViewProvider {
         break
       case "connect":
         await this.start()
+        break
+      case "disconnect":
+        await this.stop()
         break
       }
     })

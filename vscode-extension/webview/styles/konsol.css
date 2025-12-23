@@ -104,7 +104,6 @@ body {
   height: 6px;
   border-radius: 50%;
   background: var(--vscode-terminal-ansiRed);
-  transform: translateY(1px);
 }
 
 .konsol-status-indicator.connected {
